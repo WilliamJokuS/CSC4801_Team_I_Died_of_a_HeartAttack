@@ -1,10 +1,10 @@
 # Database Schema
 
-Relational schema for the recruiting platform (`REQUIREMENTS.md`). IDs are UUID strings. Timestamps are `timestamptz`, stored and compared in UTC, rendered as ISO 8601 (e.g. `2026-09-23T10:00:00Z`).
+Relational schema for the recruiting platform (`REQUIREMENTS.md`). Engine: **PostgreSQL**, accessed through the **Prisma** ORM. IDs are UUID strings. Timestamps are `timestamptz`, stored and compared in UTC, rendered as ISO 8601 (e.g. `2026-09-23T10:00:00Z`).
 
-Owner column shows who is expected to write/modify the migration for that table (see `API_Contract.md` for the full Person A/B/C split). Any table one person needs but doesn't own is a read dependency, not a reason to edit someone else's migration without a PR.
+The tables below are implemented as Prisma models in `backend/prisma/schema.prisma`; that file (plus its generated migrations under `backend/prisma/migrations/`) is the source of truth, this document is the reference. `jsonb` columns map to Prisma `Json` fields. Only the backend owner edits the schema/migrations; changes to table shape here should be agreed by the team first (see `AGENTS.md`).
 
-## users — Owner: Person A
+## users
 
 | Column | Type | Constraints |
 |---|---|---|
@@ -17,7 +17,7 @@ Owner column shows who is expected to write/modify the migration for that table 
 
 Notes: `email` uniqueness satisfies FP-AUTH-1. `password_hash` never returned by any endpoint (FP-AUTH-2).
 
-## candidate_profiles — Owner: Person A
+## candidate_profiles
 
 | Column | Type | Constraints |
 |---|---|---|
@@ -27,7 +27,7 @@ Notes: `email` uniqueness satisfies FP-AUTH-1. `password_hash` never returned by
 
 Notes: row created at registration time when `role = 'Candidate'`. Only the owning user may read/write (FP-CAN-1).
 
-## company_profiles — Owner: Person A
+## company_profiles
 
 | Column | Type | Constraints |
 |---|---|---|
@@ -37,7 +37,7 @@ Notes: row created at registration time when `role = 'Candidate'`. Only the owni
 
 Notes: row created at registration time when `role = 'Employer'` (FP-EMP-1).
 
-## jobs — Owner: Person B
+## jobs
 
 | Column | Type | Constraints |
 |---|---|---|
@@ -51,7 +51,7 @@ Notes: row created at registration time when `role = 'Employer'` (FP-EMP-1).
 
 Index: `(employer_id)`.
 
-## applications — Owner: Person B
+## applications
 
 | Column | Type | Constraints |
 |---|---|---|
@@ -66,7 +66,7 @@ Constraint: `UNIQUE (job_id, candidate_id)` — enforces "apply once" at the DB 
 
 `interview_slot_id UNIQUE` means a slot can be linked to at most one application. This is the concurrency mechanism for FP-SCHED-3: booking is a single `UPDATE ... WHERE interview_slot_id IS NULL` (or transaction with row lock) that either succeeds or violates the unique constraint, so exactly one of two racing candidates wins.
 
-## availability_slots — Owner: Person C
+## availability_slots
 
 | Column | Type | Constraints |
 |---|---|---|
@@ -93,7 +93,7 @@ applications (0..1) ---- (0..1) availability_slots   [via applications.interview
 
 ## Seed data requirements (FP-DOC-3)
 
-The seed script (owned by Person C, see `API_Contract.md`) must populate, at minimum:
+The seed script (`backend/prisma/seed.ts`, run via `npx prisma db seed` or the project's `npm run seed`) must populate, at minimum:
 
 - 2 `users` rows with `role = 'Candidate'` + matching `candidate_profiles`
 - 2 `users` rows with `role = 'Employer'` + matching `company_profiles`

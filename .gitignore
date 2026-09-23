@@ -1,1 +1,27 @@
 docs/
+
+# Dependencies (reinstalled with `npm ci`)
+node_modules/
+
+# Build output
+dist/
+build/
+coverage/
+*.tsbuildinfo
+
+# Environment files (commit .env.example only)
+.env
+.env.*
+!.env.example
+
+# Credentials / keys
+.credentials.json
+*.pem
+*.key
+
+# Logs and OS/editor files
+*.log
+npm-debug.log*
+.DS_Store
+.vscode/
+.idea/
