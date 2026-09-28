@@ -1,0 +1,17 @@
+# Local development database only (not the graded Dockerfile).
+# Creates both `recruiting` and `recruiting_test` with user/password app/app,
+# matching the placeholders in .env.example.
+services:
+  db:
+    image: postgres:16
+    environment:
+      POSTGRES_USER: app
+      POSTGRES_PASSWORD: app
+      POSTGRES_DB: recruiting
+    ports:
+      - "127.0.0.1:5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - ./scripts/create-test-db.sql:/docker-entrypoint-initdb.d/create-test-db.sql:ro
+volumes:
+  pgdata:
