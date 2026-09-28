@@ -25,6 +25,10 @@ npm run dev                                       # http://localhost:8080/api
 | `src/auth/` | Password hashing, JWT sign/verify, register/login/me service |
 | `src/middleware/auth.ts` | `requireAuth(secret)` → 401, `requireRole(...roles)` → 403 |
 | `src/lib/errors.ts` | `HttpError` + helpers; renders the `{ error: { code, message } }` envelope |
+| `src/profiles/service.ts` | Candidate and company profiles (always the caller's own, via `/me`) |
+| `src/jobs/service.ts` | Job create/list/get/update/delete, ownership checks, soft delete |
+| `src/lib/skills.ts` | Skill normalization (trim, lowercase, drop empties, dedupe), shared with matching |
+| `src/lib/params.ts` | `parseId` — a non-UUID path id is `404` |
 | `src/routes/` | One router per contract section |
 
 ## Auth design
@@ -54,3 +58,6 @@ npm run dev                                       # http://localhost:8080/api
 | 403 | `FORBIDDEN` | Wrong role or not the owner |
 | 404 | `NOT_FOUND` | Object or route doesn't exist |
 | 409 | `EMAIL_TAKEN` | Register with an existing email |
+| 409 | `JOB_HAS_DEPENDENTS` | Delete a job that has applications |
+
+Response shapes for profiles and jobs: `../specs/002-profile-and-job-shapes.md`.
