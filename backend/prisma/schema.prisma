@@ -1,0 +1,106 @@
+// Source of truth for the database. Mirrors Contract/Database_schema.md —
+// change that document (via a specs/ entry) before changing table shape here.
+
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum Role {
+  Candidate
+  Employer
+}
+
+enum ApplicationStatus {
+  Pending
+  Interviewing
+  Rejected
+  Accepted
+}
+
+model User {
+  id           String   @id @default(uuid()) @db.Uuid
+  email        String   @unique
+  passwordHash String   @map("password_hash")
+  role         Role
+  displayName  String   @map("display_name")
+  createdAt    DateTime @default(now()) @map("created_at") @db.Timestamptz
+
+  candidateProfile  CandidateProfile?
+  companyProfile    CompanyProfile?
+  jobs              Job[]
+  applications      Application[]
+  availabilitySlots AvailabilitySlot[]
+
+  @@map("users")
+}
+
+model CandidateProfile {
+  userId     String @id @map("user_id") @db.Uuid
+  skills     Json   @default("[]")
+  resumeText String @default("") @map("resume_text")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("candidate_profiles")
+}
+
+model CompanyProfile {
+  userId      String @id @map("user_id") @db.Uuid
+  companyName String @map("company_name")
+  description String @default("")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("company_profiles")
+}
+
+model Job {
+  id             String   @id @default(uuid()) @db.Uuid
+  employerId     String   @map("employer_id") @db.Uuid
+  title          String
+  description    String
+  requiredSkills Json     @default("[]") @map("required_skills")
+  isActive       Boolean  @default(true) @map("is_active")
+  createdAt      DateTime @default(now()) @map("created_at") @db.Timestamptz
+
+  employer     User          @relation(fields: [employerId], references: [id])
+  applications Application[]
+
+  @@index([employerId])
+  @@map("jobs")
+}
+
+model Application {
+  id              String            @id @default(uuid()) @db.Uuid
+  jobId           String            @map("job_id") @db.Uuid
+  candidateId     String            @map("candidate_id") @db.Uuid
+  status          ApplicationStatus @default(Pending)
+  createdAt       DateTime          @default(now()) @map("created_at") @db.Timestamptz
+  interviewSlotId String?           @unique @map("interview_slot_id") @db.Uuid
+
+  job           Job               @relation(fields: [jobId], references: [id])
+  candidate     User              @relation(fields: [candidateId], references: [id])
+  interviewSlot AvailabilitySlot? @relation(fields: [interviewSlotId], references: [id])
+
+  @@unique([jobId, candidateId])
+  @@map("applications")
+}
+
+model AvailabilitySlot {
+  id         String   @id @default(uuid()) @db.Uuid
+  employerId String   @map("employer_id") @db.Uuid
+  startTime  DateTime @map("start_time") @db.Timestamptz
+  endTime    DateTime @map("end_time") @db.Timestamptz
+  isBooked   Boolean  @default(false) @map("is_booked")
+
+  employer    User         @relation(fields: [employerId], references: [id])
+  application Application?
+
+  @@index([employerId, startTime])
+  @@map("availability_slots")
+}
