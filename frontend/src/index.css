@@ -1,0 +1,63 @@
+/* Deliberately minimal placeholder styling until the real design lands. */
+:root {
+  --bg: #f6f7f9;
+  --card: #fff;
+  --text: #1d2330;
+  --muted: #6b7280;
+  --border: #d9dde3;
+  --accent: #2563eb;
+  --danger: #b91c1c;
+  --ok: #15803d;
+  font-family: system-ui, sans-serif;
+  color: var(--text);
+  background: var(--bg);
+}
+
+* { box-sizing: border-box; }
+body { margin: 0; }
+
+header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 16px;
+  background: var(--card);
+  border-bottom: 1px solid var(--border);
+}
+header nav { display: flex; gap: 4px; flex: 1; }
+header nav button.active { background: var(--accent); color: #fff; border-color: var(--accent); }
+
+main { max-width: 1000px; margin: 0 auto; padding: 16px; }
+
+.card { background: var(--card); border: 1px solid var(--border); border-radius: 6px; padding: 16px; }
+.card.narrow { max-width: 380px; margin: 40px auto; }
+.subcard { border: 1px solid var(--border); border-radius: 6px; padding: 12px; margin: 12px 0; }
+
+form { display: flex; flex-direction: column; gap: 10px; }
+form.inline { flex-direction: row; align-items: end; flex-wrap: wrap; }
+label { display: flex; flex-direction: column; gap: 4px; font-size: 14px; }
+input, textarea, select { font: inherit; padding: 6px 8px; border: 1px solid var(--border); border-radius: 4px; }
+
+button {
+  font: inherit;
+  padding: 6px 12px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: #fff;
+  cursor: pointer;
+}
+button:disabled { opacity: 0.5; cursor: default; }
+button.link { border: none; background: none; color: var(--accent); padding: 4px 0; }
+button.danger { color: var(--danger); }
+
+table { width: 100%; border-collapse: collapse; margin-top: 12px; font-size: 14px; }
+th, td { text-align: left; padding: 8px; border-bottom: 1px solid var(--border); vertical-align: top; }
+.actions { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
+.pre { white-space: pre-wrap; background: var(--bg); }
+ul.plain { list-style: none; margin: 0; padding: 0; }
+
+.muted { color: var(--muted); }
+.error { color: var(--danger); }
+.ok { color: var(--ok); }
+.center { text-align: center; }
