@@ -65,6 +65,7 @@ model Job {
   title          String
   description    String
   requiredSkills Json     @default("[]") @map("required_skills")
+  tags           Json     @default("[]") // display labels only, never an input to matching (specs/004)
   isActive       Boolean  @default(true) @map("is_active")
   createdAt      DateTime @default(now()) @map("created_at") @db.Timestamptz
 

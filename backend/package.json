@@ -12,7 +12,9 @@
     "migrate": "prisma migrate deploy",
     "migrate:dev": "prisma migrate dev",
     "seed": "prisma db seed",
-    "postinstall": "prisma generate"
+    "postinstall": "prisma generate",
+    "db:reset": "tsx prisma/seed.ts reset",
+    "db:seed": "tsx prisma/seed.ts all"
   },
   "license": "MIT",
   "dependencies": {

@@ -1,9 +1,11 @@
 import express from 'express';
 import type { PrismaClient } from './generated/prisma/client.js';
 import { errorHandler, notFoundHandler } from './lib/errors.js';
+import { applicationsRouter } from './routes/applications.js';
 import { authRouter } from './routes/auth.js';
 import { jobsRouter } from './routes/jobs.js';
 import { profilesRouter } from './routes/profiles.js';
+import { schedulingRouter } from './routes/scheduling.js';
 
 export interface AppDeps {
   prisma: PrismaClient;
@@ -34,6 +36,8 @@ export function createApp(deps: AppDeps) {
   api.use(authRouter(deps));
   api.use(profilesRouter(deps));
   api.use(jobsRouter(deps));
+  api.use(applicationsRouter(deps));
+  api.use(schedulingRouter(deps));
 
   app.use('/api', api);
   app.use('/api', notFoundHandler);

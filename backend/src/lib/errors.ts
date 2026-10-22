@@ -46,6 +46,16 @@ export const errorHandler: ErrorRequestHandler = (err, _req, res, _next) => {
     res.status(400).json({ error: { code: 'INVALID_JSON', message: 'Request body is not valid JSON' } });
     return;
   }
+  // Body over the express.json() size limit
+  if (err?.type === 'entity.too.large') {
+    res.status(413).json({ error: { code: 'PAYLOAD_TOO_LARGE', message: 'Request body is too large' } });
+    return;
+  }
+  // Any other client error raised by the body parser (unsupported charset/encoding, ...)
+  if (err?.expose === true && Number.isInteger(err.status) && err.status >= 400 && err.status < 500) {
+    res.status(err.status).json({ error: { code: 'BAD_REQUEST', message: 'Malformed request' } });
+    return;
+  }
   console.error(err);
   res.status(500).json({ error: { code: 'INTERNAL', message: 'Internal server error' } });
 };

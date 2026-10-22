@@ -73,6 +73,33 @@ An agent asked to add or change an API endpoint should check `Contract/API_Statu
 
 No npm workspace is used for this (see `specs/` for that discussion if it changes); the three projects stay independently `npm ci`-able per `INSTALL.md`, `testing/` just reaches across via relative imports for its own test files.
 
+## Troubleshooting common errors
+
+Check this table before changing code to "fix" one of these. Most are local setup, not bugs.
+
+| Symptom | Cause | Fix |
+|---|---|---|
+| Backend exits on start: `JWT_SECRET must be at least 32 characters` | `backend/.env` still has the `change-me` placeholder or another short secret | Generate one and put it in `backend/.env` (see below). Do **not** weaken or remove the check. |
+| Backend exits on start: `Missing required environment variable ...` | No `backend/.env` | `cp backend/.env.example backend/.env`, then set `JWT_SECRET` |
+| Every request returns `401 UNAUTHORIZED` right after logging in worked before | The backend's `JWT_SECRET` changed (or you switched to another person's backend), so old tokens no longer verify | Log out and log in again. Expected behavior, not a bug. |
+| Frontend shows `HTTP_502` / `Bad Gateway` | The Vite dev proxy is up but the backend isn't running on port 8080 | Start it: `cd backend && npm run dev` |
+| `503 DB_UNAVAILABLE`, or Prisma can't connect | Postgres isn't running | `cd backend && docker compose -f docker-compose.dev.yml up -d` |
+| `500` / Prisma error mentioning a missing column (e.g. `tags`) | Your database is behind the committed migrations | `cd backend && npm run migrate` |
+| Demo logins fail with `401 INVALID_CREDENTIALS` | Database not seeded, or reset since | `cd backend && npx prisma db seed` (demo password `password123`) |
+
+### `JWT_SECRET`: what it is
+
+Login returns a JWT: a token saying "user X, role Y, valid 24h", plus a signature computed from those contents and `JWT_SECRET`. The backend recomputes the signature on every request, so a token whose user or role was edited is rejected with `401`. That only holds while the secret is secret: with a known secret (such as the placeholder in `.env.example`, which is public on GitHub), anyone can sign a valid token for any user and role. That is why the backend refuses to start with a secret under 32 characters.
+
+Rules:
+
+- Each person generates their **own** secret for their local `backend/.env`:
+  `node -e "console.log(require('crypto').randomBytes(48).toString('base64url'))"`
+- Never commit a real secret, never put one in `.env.example`, and never share secrets between teammates. The frontend never needs it: it only stores and sends the token.
+- Changing the secret logs everyone out (old tokens fail with `401`). That is expected.
+- The `Dockerfile` must generate a random secret at container start, not bake one into the image or the repo.
+- Unit tests pass their own secret to `createApp(...)` (`backend/src/app.ts`) and don't read `.env`.
+
 ## Before finishing a task
 
 Report to the user:
