@@ -46,6 +46,7 @@ Notes: row created at registration time when `role = 'Employer'` (FP-EMP-1).
 | title | text | NOT NULL, CHECK (title <> '') |
 | description | text | NOT NULL, CHECK (description <> '') |
 | required_skills | jsonb | NOT NULL, DEFAULT '[]' (may be empty per FP-EMP-2) |
+| tags | jsonb | NOT NULL, DEFAULT '[]' (display labels, case kept, deduped case-insensitively; never an input to matching — specs/004) |
 | is_active | boolean | NOT NULL, DEFAULT true (soft delete: "current (not deleted)" jobs per FP-CAN-2) |
 | created_at | timestamptz | NOT NULL, DEFAULT now() |
 

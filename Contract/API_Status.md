@@ -18,10 +18,10 @@ Whoever finishes their side flips the status. Whoever finds a mismatch sets it t
 
 | Endpoint | Status | Notes |
 |---|---|---|
-| `POST /api/auth/register` | Backend done | `AuthUser` shape proposed in [specs/001](../specs/001-authuser-shape.md) |
-| `POST /api/auth/login` | Backend done | `AuthUser` shape proposed in [specs/001](../specs/001-authuser-shape.md) |
+| `POST /api/auth/register` | Backend done | `AuthUser` shape in [specs/001](../specs/001-authuser-shape.md) |
+| `POST /api/auth/login` | Backend done | `AuthUser` shape in [specs/001](../specs/001-authuser-shape.md) |
 | `POST /api/auth/logout` | Backend done | Stateless: `204`, client discards the token |
-| `GET /api/me` | Backend done | `AuthUser` shape proposed in [specs/001](../specs/001-authuser-shape.md) |
+| `GET /api/me` | Backend done | `AuthUser` shape in [specs/001](../specs/001-authuser-shape.md) |
 
 ## Profiles
 
