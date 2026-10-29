@@ -1,0 +1,97 @@
+import { useState, type KeyboardEvent } from 'react'
+
+interface TagsFieldProps {
+  tags: string[]
+  onChange: (tags: string[]) => void
+  label?: string
+  inputId?: string
+  maxTags?: number
+}
+
+function TagsField({
+  tags,
+  onChange,
+  label = 'Tags',
+  inputId = 'tag_input',
+  maxTags = 10,
+}: TagsFieldProps) {
+  const [tagInput, setTagInput] = useState('')
+
+  function addTag(raw: string) {
+    const trimmed = raw.trim()
+    if (!trimmed || tags.length >= maxTags) {
+      return
+    }
+    if (tags.some((tag) => tag.toLowerCase() === trimmed.toLowerCase())) {
+      setTagInput('')
+      return
+    }
+    onChange([...tags, trimmed])
+    setTagInput('')
+  }
+
+  function removeTag(tagToRemove: string) {
+    onChange(tags.filter((tag) => tag !== tagToRemove))
+  }
+
+  function handleKeyDown(event: KeyboardEvent<HTMLInputElement>) {
+    if (event.key === 'Enter' || event.key === ',') {
+      event.preventDefault()
+      addTag(tagInput)
+    }
+  }
+
+  return (
+    <div>
+      <label htmlFor={inputId} className="block text-sm font-medium text-gray-700">
+        {label}
+      </label>
+      <p className="mt-1 text-xs text-gray-500">
+        Press Enter or comma to add. Max {maxTags} tags (Remote, Full-time, …).
+      </p>
+      <div className="mt-2 flex gap-2">
+        <input
+          id={inputId}
+          type="text"
+          value={tagInput}
+          onChange={(e) => setTagInput(e.target.value)}
+          onKeyDown={handleKeyDown}
+          disabled={tags.length >= maxTags}
+          placeholder="e.g. Remote"
+          className="flex-1 rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-gray-500 focus:outline-none disabled:opacity-50"
+        />
+        <button
+          type="button"
+          onClick={() => addTag(tagInput)}
+          disabled={tags.length >= maxTags}
+          className="rounded-md border border-gray-300 px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50"
+        >
+          Add
+        </button>
+      </div>
+      {tags.length > 0 ? (
+        <ul className="mt-3 flex flex-wrap gap-2">
+          {tags.map((tag) => (
+            <li key={tag}>
+              <span className="inline-flex items-center gap-1 rounded-full bg-blue-50 px-3 py-1 text-sm text-blue-900">
+                {tag}
+                <button
+                  type="button"
+                  onClick={() => removeTag(tag)}
+                  aria-label={`Remove ${tag}`}
+                  className="text-blue-700 hover:text-blue-950"
+                >
+                  ×
+                </button>
+              </span>
+            </li>
+          ))}
+        </ul>
+      ) : (
+        <p className="mt-3 text-sm text-gray-500">No tags added.</p>
+      )}
+    </div>
+  )
+}
+
+export default TagsField
