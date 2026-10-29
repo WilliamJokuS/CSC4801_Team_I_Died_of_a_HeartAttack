@@ -1,0 +1,94 @@
+import { useState, type KeyboardEvent } from 'react'
+
+interface SkillsFieldProps {
+  skills: string[]
+  onChange: (skills: string[]) => void
+  inputId?: string
+  label?: string
+  hint?: string
+}
+
+function SkillsField({
+  skills,
+  onChange,
+  inputId = 'skill_input',
+  label = 'Required skills',
+  hint = 'Press Enter to add each skill. Leave empty if none.',
+}: SkillsFieldProps) {
+  const [skillInput, setSkillInput] = useState('')
+
+  function addSkill(raw: string) {
+    const trimmed = raw.trim()
+    if (!trimmed) {
+      return
+    }
+    const normalized = trimmed.toLowerCase()
+    if (skills.some((skill) => skill.toLowerCase() === normalized)) {
+      setSkillInput('')
+      return
+    }
+    onChange([...skills, trimmed])
+    setSkillInput('')
+  }
+
+  function removeSkill(skillToRemove: string) {
+    onChange(skills.filter((skill) => skill !== skillToRemove))
+  }
+
+  function handleSkillKeyDown(event: KeyboardEvent<HTMLInputElement>) {
+    if (event.key === 'Enter') {
+      event.preventDefault()
+      addSkill(skillInput)
+    }
+  }
+
+  return (
+    <div>
+      <label htmlFor={inputId} className="block text-sm font-medium text-gray-700">
+        {label}
+      </label>
+      <p className="mt-1 text-xs text-gray-500">{hint}</p>
+      <div className="mt-2 flex gap-2">
+        <input
+          id={inputId}
+          type="text"
+          value={skillInput}
+          onChange={(e) => setSkillInput(e.target.value)}
+          onKeyDown={handleSkillKeyDown}
+          placeholder="e.g. Python"
+          className="flex-1 rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-gray-500 focus:outline-none"
+        />
+        <button
+          type="button"
+          onClick={() => addSkill(skillInput)}
+          className="rounded-md border border-gray-300 px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50"
+        >
+          Add
+        </button>
+      </div>
+      {skills.length > 0 ? (
+        <ul className="mt-3 flex flex-wrap gap-2">
+          {skills.map((skill) => (
+            <li key={skill}>
+              <span className="inline-flex items-center gap-1 rounded-full bg-gray-100 px-3 py-1 text-sm text-gray-800">
+                {skill}
+                <button
+                  type="button"
+                  onClick={() => removeSkill(skill)}
+                  aria-label={`Remove ${skill}`}
+                  className="text-gray-500 hover:text-gray-900"
+                >
+                  ×
+                </button>
+              </span>
+            </li>
+          ))}
+        </ul>
+      ) : (
+        <p className="mt-3 text-sm text-gray-500">No skills added.</p>
+      )}
+    </div>
+  )
+}
+
+export default SkillsField

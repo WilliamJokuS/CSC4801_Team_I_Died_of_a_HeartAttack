@@ -1,0 +1,54 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  body {
+    @apply bg-canvas font-sans text-sm text-ink antialiased;
+  }
+
+  button:focus-visible,
+  input:focus-visible,
+  select:focus-visible,
+  textarea:focus-visible {
+    @apply outline outline-[3px] outline-offset-2 outline-[#bfd3ff];
+  }
+}
+
+@layer components {
+  .btn-primary {
+    @apply inline-flex items-center justify-center rounded-[10px] border border-brand bg-brand px-[17px] py-[11px] text-sm font-bold text-white transition hover:bg-brand-dark disabled:opacity-50;
+  }
+
+  .btn-secondary {
+    @apply inline-flex items-center justify-center rounded-[10px] border border-line bg-white px-4 py-[11px] text-sm font-semibold text-ink transition hover:bg-[#f4f7ff] disabled:opacity-50;
+  }
+
+  .input-field {
+    @apply w-full rounded-[10px] border border-[#e5ebe6] bg-white px-[15px] text-ink placeholder:text-muted focus:border-brand focus:outline-none;
+  }
+
+  .card-panel {
+    @apply rounded-panel border border-line bg-white p-6 shadow-card;
+  }
+
+  .filter-chip {
+    @apply rounded-[30px] border border-[#e0e8e0] bg-white px-[15px] py-2 text-xs font-bold text-[#718075] transition;
+  }
+
+  .filter-chip-active {
+    @apply border-[#bdd0ff] bg-[#eaf1ff] text-[#2b57bc];
+  }
+
+  .eyebrow {
+    @apply mb-[13px] text-[11px] font-bold uppercase tracking-[1.5px] text-brand;
+  }
+
+  .page-heading {
+    @apply font-display text-[34px] font-extrabold leading-tight tracking-[-1.55px] text-ink;
+  }
+
+  .page-sub {
+    @apply text-sm leading-relaxed text-[#88958b];
+  }
+}
