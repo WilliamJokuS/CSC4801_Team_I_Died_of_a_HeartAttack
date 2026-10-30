@@ -9,6 +9,7 @@ import { useAuth } from '../hooks/useAuth'
 import { useSavedJobs } from '../hooks/useSavedJobs'
 import { useToast } from '../hooks/useToast'
 import { apiErrorMessage } from '../lib/apiErrorMessage'
+import { formatDateTime } from '../lib/formatDateTime'
 import { normalizeScoredJob } from '../lib/normalizeApi'
 import { isPreviewUser, loadPreviewJobs, loadPreviewSkills, savePreviewApplication } from '../lib/preview'
 import type { ScoredJob } from '../types'
@@ -324,6 +325,9 @@ function CandidateJobsView({ savedOnly = false }: { savedOnly?: boolean }) {
                         </span>
                       ))}
                     </div>
+                    <p className="mt-3 text-xs text-[#8591a2]">
+                      Posted {formatDateTime(job.created_at)}
+                    </p>
                   </button>
                 )
               })

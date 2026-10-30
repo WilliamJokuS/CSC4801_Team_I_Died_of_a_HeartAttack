@@ -1,10 +1,10 @@
 import { useCallback, useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { jobsApi } from '../api/endpoints'
-import EmployerNav from '../components/EmployerNav'
-import PageShell from '../components/layout/PageShell'
+import ConfirmDialog from '../components/ui/ConfirmDialog'
 import LoadingScreen from '../components/LoadingScreen'
 import { useAuth } from '../hooks/useAuth'
+import { useToast } from '../hooks/useToast'
 import { apiErrorMessage } from '../lib/apiErrorMessage'
 import { normalizeEmployerJob } from '../lib/normalizeApi'
 import { deletePreviewEmployerJob, loadPreviewEmployerJobs } from '../lib/employerPreview'
@@ -21,6 +21,8 @@ function EmployerDashboardPage() {
   const [infoMessage, setInfoMessage] = useState<string | null>(null)
   const [actionError, setActionError] = useState<string | null>(null)
   const [deletingJobId, setDeletingJobId] = useState<string | null>(null)
+  const [jobPendingDelete, setJobPendingDelete] = useState<EmployerJob | null>(null)
+  const { pushToast } = useToast()
 
   const loadJobs = useCallback(async () => {
     setIsLoading(true)
@@ -49,17 +51,20 @@ function EmployerDashboardPage() {
     void loadJobs()
   }, [loadJobs])
 
-  async function handleDelete(job: EmployerJob) {
+  function requestDelete(job: EmployerJob) {
     if ((job.applicant_count ?? 0) > 0) {
       setActionError("This job has applicants, so it can't be deleted.")
       return
     }
+    setJobPendingDelete(job)
+  }
 
-    const confirmed = window.confirm(`Delete "${job.title}"? This cannot be undone.`)
-    if (!confirmed) {
+  async function confirmDelete() {
+    const job = jobPendingDelete
+    if (!job) {
       return
     }
-
+    setJobPendingDelete(null)
     setActionError(null)
     setDeletingJobId(job.id)
 
@@ -71,6 +76,7 @@ function EmployerDashboardPage() {
         await jobsApi.remove(job.id)
         setJobs((current) => current.filter((item) => item.id !== job.id))
       }
+      pushToast(`Deleted "${job.title}"`, 'error')
     } catch (err) {
       setActionError(apiErrorMessage(err, 'Could not delete the job. Please try again.'))
     } finally {
@@ -83,7 +89,7 @@ function EmployerDashboardPage() {
   }
 
   return (
-    <PageShell nav={<EmployerNav />} width="4xl">
+    <>
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
             <h1 className="text-2xl font-semibold text-gray-900">Your job postings</h1>
@@ -185,7 +191,7 @@ function EmployerDashboardPage() {
                   </Link>
                   <button
                     type="button"
-                    onClick={() => void handleDelete(job)}
+                    onClick={() => requestDelete(job)}
                     disabled={deletingJobId === job.id || (job.applicant_count ?? 0) > 0}
                     title={
                       (job.applicant_count ?? 0) > 0
@@ -201,7 +207,19 @@ function EmployerDashboardPage() {
             ))}
           </ul>
         )}
-    </PageShell>
+      <ConfirmDialog
+        open={Boolean(jobPendingDelete)}
+        title="Delete job posting?"
+        message={
+          jobPendingDelete
+            ? `Delete "${jobPendingDelete.title}"? This cannot be undone.`
+            : ''
+        }
+        confirmLabel="Delete"
+        onCancel={() => setJobPendingDelete(null)}
+        onConfirm={() => void confirmDelete()}
+      />
+    </>
   )
 }
 

@@ -1,10 +1,11 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { Link, useLocation } from 'react-router-dom'
+import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { applicationsApi } from '../api/endpoints'
 import ApplicationStatusBadge from '../components/ApplicationStatusBadge'
 import CompanyLogo from '../components/ui/CompanyLogo'
 import LoadingScreen from '../components/LoadingScreen'
 import { useAuth } from '../hooks/useAuth'
+import { useToast } from '../hooks/useToast'
 import { apiErrorMessage } from '../lib/apiErrorMessage'
 import { normalizeScoredApplication } from '../lib/normalizeApi'
 import { formatDateTime } from '../lib/formatDateTime'
@@ -22,7 +23,17 @@ function CandidateApplicationsPage() {
   const { user } = useAuth()
   const previewMode = isPreviewUser(user?.id)
   const location = useLocation()
+  const navigate = useNavigate()
+  const { pushToast } = useToast()
   const bookingSuccess = (location.state as { bookingSuccess?: boolean } | null)?.bookingSuccess
+
+  useEffect(() => {
+    if (!bookingSuccess) {
+      return
+    }
+    pushToast('Interview booked successfully.', 'success')
+    navigate(location.pathname, { replace: true, state: null })
+  }, [bookingSuccess, location.pathname, navigate, pushToast])
 
   const [applications, setApplications] = useState<ScoredApplication[]>([])
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('All')
@@ -99,12 +110,6 @@ function CandidateApplicationsPage() {
           Explore more roles →
         </Link>
       </div>
-
-      {bookingSuccess && (
-        <p className="mb-4 rounded-panel border border-green-200 bg-green-50 px-4 py-3 text-sm text-green-800">
-          Interview booked successfully.
-        </p>
-      )}
 
       {infoMessage && (
         <p className="mb-4 rounded-panel border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
@@ -183,7 +188,10 @@ function CandidateApplicationsPage() {
                   Interview: {interviewSummary(application)} · {application.match_score}% match
                 </p>
               </div>
-              <ApplicationStatusBadge status={application.status} />
+              <ApplicationStatusBadge
+                status={application.status}
+                interviewBooked={Boolean(application.interview_slot)}
+              />
               <div className="flex flex-wrap gap-2">
                 {previewMode && application.status === 'Pending' && (
                   <button

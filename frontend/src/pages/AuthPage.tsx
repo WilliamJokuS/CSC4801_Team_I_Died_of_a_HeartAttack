@@ -5,6 +5,7 @@ import { IconEye, IconLock, IconMail, IconShield, IconUser } from '../components
 import LoadingScreen from '../components/LoadingScreen'
 import { useAuth } from '../hooks/useAuth'
 import { apiErrorMessage } from '../lib/apiErrorMessage'
+import { safeReturnPath } from '../lib/returnPath'
 import type { Role } from '../types'
 
 const REMEMBER_KEY = 'csc4801.rememberEmail'
@@ -41,8 +42,11 @@ function AuthPage() {
     return <LoadingScreen />
   }
 
+  const returnTo = safeReturnPath((location.state as { from?: string } | null)?.from)
+
   if (user) {
-    return <Navigate to={user.role === 'Candidate' ? '/candidate' : '/employer'} replace />
+    const home = user.role === 'Candidate' ? '/candidate' : '/employer'
+    return <Navigate to={returnTo ?? home} replace />
   }
 
   function switchMode(next: AuthMode) {
@@ -110,7 +114,8 @@ function AuthPage() {
           role,
         })
       }
-      navigate('/', { replace: true })
+      const home = role === 'Candidate' ? '/candidate' : '/employer'
+      navigate(returnTo ?? home, { replace: true })
     } catch (err) {
       setMessage({ type: 'error', text: apiErrorMessage(err) })
     } finally {

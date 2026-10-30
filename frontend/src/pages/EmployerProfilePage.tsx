@@ -1,10 +1,9 @@
 import { useEffect, useState, type FormEvent } from 'react'
 import { profileApi } from '../api/endpoints'
-import EmployerNav from '../components/EmployerNav'
-import PageShell from '../components/layout/PageShell'
 import LoadingScreen from '../components/LoadingScreen'
 import { useAuth } from '../hooks/useAuth'
 import { apiErrorMessage } from '../lib/apiErrorMessage'
+import { LIMITS } from '../lib/formLimits'
 import { isPreviewUser } from '../lib/preview'
 import { loadPreviewCompanyProfile, savePreviewCompanyProfile } from '../lib/employerPreview'
 
@@ -14,6 +13,7 @@ function EmployerProfilePage() {
 
   const [companyName, setCompanyName] = useState('')
   const [description, setDescription] = useState('')
+  const [saved, setSaved] = useState({ companyName: '', description: '' })
   const [isLoading, setIsLoading] = useState(true)
   const [isSaving, setIsSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -33,6 +33,7 @@ function EmployerProfilePage() {
         if (!cancelled) {
           setCompanyName(profile.company_name)
           setDescription(profile.description)
+          setSaved({ companyName: profile.company_name, description: profile.description })
           setLoadWarning('Preview mode: company profile is stored locally in this browser.')
           setIsLoading(false)
         }
@@ -44,6 +45,7 @@ function EmployerProfilePage() {
         if (!cancelled) {
           setCompanyName(profile.company_name)
           setDescription(profile.description)
+          setSaved({ companyName: profile.company_name, description: profile.description })
         }
       } catch (err) {
         if (!cancelled) {
@@ -76,11 +78,13 @@ function EmployerProfilePage() {
     try {
       if (previewMode) {
         savePreviewCompanyProfile(payload)
+        setSaved({ companyName: payload.company_name, description: payload.description })
         setSuccess('Company profile saved locally (preview mode).')
       } else {
         const updated = await profileApi.updateCompany(payload)
         setCompanyName(updated.company_name)
         setDescription(updated.description)
+        setSaved({ companyName: updated.company_name, description: updated.description })
         setSuccess('Company profile saved.')
       }
     } catch (err) {
@@ -90,12 +94,19 @@ function EmployerProfilePage() {
     }
   }
 
+  const isDirty =
+    companyName.trim() !== saved.companyName.trim() || description !== saved.description
+
   if (isLoading) {
-    return <LoadingScreen />
+    return (
+      <div className="flex min-h-[40vh] items-center justify-center">
+        <LoadingScreen />
+      </div>
+    )
   }
 
   return (
-    <PageShell nav={<EmployerNav />} width="2xl">
+    <>
         <h1 className="text-2xl font-semibold text-gray-900">Company profile</h1>
         <p className="mt-2 text-sm text-gray-600">
           Candidates see your company name on job listings.
@@ -119,10 +130,14 @@ function EmployerProfilePage() {
               id="company_name"
               type="text"
               required
+              maxLength={LIMITS.companyNameMaxLength}
               value={companyName}
               onChange={(e) => setCompanyName(e.target.value)}
-              className="mt-1 w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-gray-500 focus:outline-none"
+              className="input-field mt-1 py-2"
             />
+            <p className="mt-1 text-xs text-muted">
+              {companyName.length} / {LIMITS.companyNameMaxLength} characters
+            </p>
           </div>
 
           <div>
@@ -143,13 +158,13 @@ function EmployerProfilePage() {
 
           <button
             type="submit"
-            disabled={isSaving}
+            disabled={isSaving || !isDirty}
             className="btn-primary disabled:opacity-50"
           >
             {isSaving ? 'Saving…' : 'Save profile'}
           </button>
         </form>
-    </PageShell>
+    </>
   )
 }
 

@@ -1,4 +1,4 @@
-import { useEffect, useState, type FormEvent } from 'react'
+import { useEffect, useMemo, useState, type FormEvent } from 'react'
 import { Link } from 'react-router-dom'
 import { profileApi } from '../api/endpoints'
 import LoadingScreen from '../components/LoadingScreen'
@@ -6,6 +6,8 @@ import SkillsField from '../components/SkillsField'
 import { useAuth } from '../hooks/useAuth'
 import { apiErrorMessage } from '../lib/apiErrorMessage'
 import { initialsFromDisplayName } from '../lib/companyLogoStyle'
+import { stringArraysEqual } from '../lib/formChange'
+import { LIMITS } from '../lib/formLimits'
 import { isPreviewUser, PREVIEW_PROFILE_KEY } from '../lib/preview'
 
 function emptyProfile(displayName: string) {
@@ -60,6 +62,7 @@ function CandidateProfilePage() {
   const [error, setError] = useState<string | null>(null)
   const [success, setSuccess] = useState<string | null>(null)
   const [loadWarning, setLoadWarning] = useState<string | null>(null)
+  const [saved, setSaved] = useState({ displayName: '', skills: [] as string[], resumeText: '' })
 
   useEffect(() => {
     let cancelled = false
@@ -75,6 +78,11 @@ function CandidateProfilePage() {
           setDisplayName(preview.display_name)
           setSkills(preview.skills)
           setResumeText(preview.resume_text)
+          setSaved({
+            displayName: preview.display_name,
+            skills: preview.skills,
+            resumeText: preview.resume_text,
+          })
           setLoadWarning('Preview mode: profile is stored locally in this browser.')
           setIsLoading(false)
         }
@@ -87,6 +95,11 @@ function CandidateProfilePage() {
           setDisplayName(profile.display_name)
           setSkills(Array.isArray(profile.skills) ? profile.skills : [])
           setResumeText(profile.resume_text)
+          setSaved({
+            displayName: profile.display_name,
+            skills: Array.isArray(profile.skills) ? profile.skills : [],
+            resumeText: profile.resume_text,
+          })
         }
       } catch (err) {
         if (!cancelled) {
@@ -129,12 +142,22 @@ function CandidateProfilePage() {
     try {
       if (previewMode) {
         savePreviewProfile(payload)
+        setSaved({
+          displayName: payload.display_name,
+          skills: payload.skills,
+          resumeText: payload.resume_text,
+        })
         setSuccess('Profile saved locally (preview mode).')
       } else {
         const updated = await profileApi.updateCandidate(payload)
         setDisplayName(updated.display_name)
         setSkills(updated.skills)
         setResumeText(updated.resume_text)
+        setSaved({
+          displayName: updated.display_name,
+          skills: updated.skills,
+          resumeText: updated.resume_text,
+        })
         setSuccess('Profile saved.')
       }
     } catch (err) {
@@ -143,6 +166,14 @@ function CandidateProfilePage() {
       setIsSaving(false)
     }
   }
+
+  const isDirty = useMemo(
+    () =>
+      displayName.trim() !== saved.displayName.trim() ||
+      !stringArraysEqual(skills, saved.skills) ||
+      resumeText !== saved.resumeText,
+    [displayName, resumeText, saved, skills],
+  )
 
   if (isLoading) {
     return (
@@ -160,7 +191,7 @@ function CandidateProfilePage() {
           <h1 className="page-heading">Your profile & résumé.</h1>
           <p className="page-sub mt-2">A little more about you helps make every match more meaningful.</p>
         </div>
-        <button type="submit" form="profile-form" disabled={isSaving} className="btn-primary">
+        <button type="submit" form="profile-form" disabled={isSaving || !isDirty} className="btn-primary">
           {isSaving ? 'Saving…' : 'Save changes →'}
         </button>
       </div>
@@ -192,10 +223,14 @@ function CandidateProfilePage() {
                 id="display_name"
                 type="text"
                 required
+                maxLength={LIMITS.displayNameMaxLength}
                 value={displayName}
                 onChange={(e) => setDisplayName(e.target.value)}
                 className="input-field rounded-[9px] px-[13px] py-3"
               />
+              <span className="text-xs font-normal text-muted">
+                {displayName.length} / {LIMITS.displayNameMaxLength}
+              </span>
             </label>
             <label className="flex flex-col gap-2 text-xs font-bold text-[#5d6e62] sm:col-span-2">
               Skills (used for match scores)
@@ -222,7 +257,7 @@ function CandidateProfilePage() {
           {error && <p className="text-sm text-red-600">{error}</p>}
           {success && <p className="text-sm text-green-700">{success}</p>}
 
-          <button type="submit" disabled={isSaving} className="btn-primary mt-4">
+          <button type="submit" disabled={isSaving || !isDirty} className="btn-primary mt-4">
             {isSaving ? 'Saving…' : 'Save profile changes'}
           </button>
         </form>

@@ -1,5 +1,6 @@
 import { Route, Routes } from 'react-router-dom'
 import CandidateAppLayout from './components/layout/CandidateAppLayout'
+import EmployerAppLayout from './components/layout/EmployerAppLayout'
 import ProtectedRoute from './components/ProtectedRoute'
 import CandidateApplicationsPage from './pages/CandidateApplicationsPage'
 import CandidateBookInterviewPage from './pages/CandidateBookInterviewPage'
@@ -14,6 +15,7 @@ import EmployerJobFormPage from './pages/EmployerJobFormPage'
 import EmployerProfilePage from './pages/EmployerProfilePage'
 import HomePage from './pages/HomePage'
 import LoginPage from './pages/LoginPage'
+import NotFoundPage from './pages/NotFoundPage'
 import RegisterPage from './pages/RegisterPage'
 
 function App() {
@@ -41,50 +43,18 @@ function App() {
         path="/employer"
         element={
           <ProtectedRoute role="Employer">
-            <EmployerDashboardPage />
+            <EmployerAppLayout />
           </ProtectedRoute>
         }
-      />
-      <Route
-        path="/employer/profile"
-        element={
-          <ProtectedRoute role="Employer">
-            <EmployerProfilePage />
-          </ProtectedRoute>
-        }
-      />
-      <Route
-        path="/employer/availability"
-        element={
-          <ProtectedRoute role="Employer">
-            <EmployerAvailabilityPage />
-          </ProtectedRoute>
-        }
-      />
-      <Route
-        path="/employer/jobs/new"
-        element={
-          <ProtectedRoute role="Employer">
-            <EmployerJobFormPage />
-          </ProtectedRoute>
-        }
-      />
-      <Route
-        path="/employer/jobs/:jobId/edit"
-        element={
-          <ProtectedRoute role="Employer">
-            <EmployerJobFormPage />
-          </ProtectedRoute>
-        }
-      />
-      <Route
-        path="/employer/jobs/:jobId/applicants"
-        element={
-          <ProtectedRoute role="Employer">
-            <EmployerApplicantsPage />
-          </ProtectedRoute>
-        }
-      />
+      >
+        <Route index element={<EmployerDashboardPage />} />
+        <Route path="profile" element={<EmployerProfilePage />} />
+        <Route path="availability" element={<EmployerAvailabilityPage />} />
+        <Route path="jobs/new" element={<EmployerJobFormPage />} />
+        <Route path="jobs/:jobId/edit" element={<EmployerJobFormPage />} />
+        <Route path="jobs/:jobId/applicants" element={<EmployerApplicantsPage />} />
+      </Route>
+      <Route path="*" element={<NotFoundPage />} />
     </Routes>
   )
 }
