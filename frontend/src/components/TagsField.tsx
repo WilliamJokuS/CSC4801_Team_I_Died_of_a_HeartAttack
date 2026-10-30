@@ -1,4 +1,5 @@
 import { useState, type KeyboardEvent } from 'react'
+import { LIMITS } from '../lib/formLimits'
 
 interface TagsFieldProps {
   tags: string[]
@@ -13,12 +14,12 @@ function TagsField({
   onChange,
   label = 'Tags',
   inputId = 'tag_input',
-  maxTags = 10,
+  maxTags = LIMITS.tagsMaxCount,
 }: TagsFieldProps) {
   const [tagInput, setTagInput] = useState('')
 
   function addTag(raw: string) {
-    const trimmed = raw.trim()
+    const trimmed = raw.trim().slice(0, LIMITS.tagMaxLength)
     if (!trimmed || tags.length >= maxTags) {
       return
     }
@@ -47,13 +48,14 @@ function TagsField({
         {label}
       </label>
       <p className="mt-1 text-xs text-gray-500">
-        Press Enter or comma to add. Max {maxTags} tags (Remote, Full-time, …).
+        Press Enter or comma to add. Max {maxTags} tags, {LIMITS.tagMaxLength} characters each.
       </p>
       <div className="mt-2 flex gap-2">
         <input
           id={inputId}
           type="text"
           value={tagInput}
+          maxLength={LIMITS.tagMaxLength}
           onChange={(e) => setTagInput(e.target.value)}
           onKeyDown={handleKeyDown}
           disabled={tags.length >= maxTags}
@@ -69,6 +71,9 @@ function TagsField({
           Add
         </button>
       </div>
+      <p className="mt-1 text-xs text-gray-500">
+        {tagInput.length} / {LIMITS.tagMaxLength} characters in input
+      </p>
       {tags.length > 0 ? (
         <ul className="mt-3 flex flex-wrap gap-2">
           {tags.map((tag) => (

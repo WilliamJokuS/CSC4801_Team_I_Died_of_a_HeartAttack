@@ -132,7 +132,10 @@ function CandidateOverviewPage() {
                     <b className="block truncate text-sm">{app.job.title}</b>
                     <span className="text-xs text-muted">{app.job.company_name}</span>
                   </div>
-                  <ApplicationStatusBadge status={app.status} />
+                  <ApplicationStatusBadge
+                    status={app.status}
+                    interviewBooked={Boolean(app.interview_slot)}
+                  />
                 </li>
               ))}
             </ul>
