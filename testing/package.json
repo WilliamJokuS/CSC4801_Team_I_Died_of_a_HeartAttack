@@ -1,0 +1,27 @@
+{
+  "name": "csc4801-testing",
+  "version": "1.0.0",
+  "description": "Unit tests for the CSC4801 recruiting platform (imports backend/src and frontend/src directly)",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "vitest run --configLoader native src/unit src/frontend",
+    "test:bugs": "vitest run --configLoader native src/regression",
+    "test:watch": "vitest --configLoader native src/unit src/frontend"
+  },
+  "license": "MIT",
+  "engines": {
+    "node": ">=22"
+  },
+  "devDependencies": {
+    "@testing-library/dom": "^10.4.2",
+    "@testing-library/react": "^16.3.3",
+    "@vitejs/plugin-react": "^6.2.1",
+    "jsdom": "^29.1.1",
+    "light-my-request": "^6.8.0",
+    "react": "^19.3.1",
+    "react-dom": "^19.3.1",
+    "react-router-dom": "^7.18.5",
+    "vitest": "^4.1.12"
+  }
+}
