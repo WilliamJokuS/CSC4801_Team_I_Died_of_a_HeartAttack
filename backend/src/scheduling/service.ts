@@ -101,8 +101,33 @@ export async function createSlot(deps: SchedulingDeps, employerId: string, input
   const end = new Date(data.end_time);
   const problem = validateSlotTimes(start, end, clock(deps));
   if (problem) throw badRequest(problem);
-  const slot = await deps.prisma.availabilitySlot.create({ data: { employerId, startTime: start, endTime: end } });
-  return toSlot(slot);
+  // The availability_slots_no_overlap exclusion constraint is the real guard (race-safe); this
+  // check just gives the common case a clear error without relying on the driver's error shape.
+  const [earliest] = await deps.prisma.availabilitySlot.findMany({
+    where: { employerId, endTime: { gt: start } },
+    orderBy: { startTime: 'asc' },
+    select: { startTime: true },
+    take: 1,
+  });
+  if (earliest && earliest.startTime < end) throw slotOverlap();
+  try {
+    return await deps.prisma.$transaction(async (tx) => {
+      const slot = await tx.availabilitySlot.create({ data: { employerId, startTime: start, endTime: end } });
+      // The exclusion constraint can block the insert until the slot has already started.
+      if (start <= clock(deps)) throw badRequest('start_time must be in the future');
+      return toSlot(slot);
+    });
+  } catch (err) {
+    if (isExclusionViolation(err)) throw slotOverlap();
+    throw err;
+  }
+}
+
+const slotOverlap = () => conflict('You already have a slot that overlaps this time', 'SLOT_OVERLAP');
+
+/** Postgres 23P01 (exclusion_violation), from a concurrent create that slipped past the pre-check. */
+function isExclusionViolation(err: unknown): boolean {
+  return /23P01|availability_slots_no_overlap/.test(String((err as Error)?.message ?? err));
 }
 
 /**
@@ -198,7 +223,6 @@ export async function bookSlot(
   input: unknown,
 ): Promise<Application> {
   const { slot_id: slotId } = bookInputSchema.parse(input);
-  const now = clock(deps);
 
   try {
     return await deps.prisma.$transaction(async (tx) => {
@@ -213,6 +237,8 @@ export async function bookSlot(
         where: { id: slotId },
         include: { application: { select: { id: true } } },
       });
+      // A slot can start while this transaction is waiting for a row lock.
+      const now = clock(deps);
       const error = bookingError({
         application: app,
         jobEmployerId: app.job.employerId,

@@ -10,8 +10,9 @@ import {
 
 export function profilesRouter(deps: ProfileDeps & { jwtSecret: string }): Router {
   const router = Router();
-  const candidate = [requireAuth(deps.jwtSecret), requireRole('Candidate')];
-  const employer = [requireAuth(deps.jwtSecret), requireRole('Employer')];
+  const authenticated = requireAuth(deps.jwtSecret, deps.prisma);
+  const candidate = [authenticated, requireRole('Candidate')];
+  const employer = [authenticated, requireRole('Employer')];
 
   router.get('/candidates/me/profile', ...candidate, async (req, res) => {
     res.json(await getCandidateProfile(deps, req.auth!.sub));
