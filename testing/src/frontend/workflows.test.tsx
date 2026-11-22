@@ -62,7 +62,7 @@ const empUser = {
 };
 
 describe('Frontend UI workflows (FP-CAN-2, FP-CAN-3, FP-EMP-2, FP-EMP-3, FP-SCHED-2, FP-SCHED-3)', () => {
-  it('FP-SCHED-3 UI: CandidateBookInterviewPage handles a 409 SLOT_TAKEN race by showing the friendly message and reloading remaining slots', async () => {
+  it('FP-SCHED-3 UI: CandidateBookInterviewPage reloads remaining slots after a 409 SLOT_TAKEN race', async () => {
     let availableSlotsCalls = 0;
     const origFetch = globalThis.fetch;
     globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {

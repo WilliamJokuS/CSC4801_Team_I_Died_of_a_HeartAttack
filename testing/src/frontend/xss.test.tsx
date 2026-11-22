@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { cleanup, render, screen, waitFor } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import JobDetailDialog from '../../../frontend/src/components/JobDetailDialog';
@@ -7,7 +7,11 @@ import JobDetailPanel from '../../../frontend/src/components/jobs/JobDetailPanel
 import JobListingCard from '../../../frontend/src/components/jobs/JobListingCard';
 import { AuthContext } from '../../../frontend/src/context/auth-context';
 import { ToastProvider } from '../../../frontend/src/context/ToastContext';
+import CandidateApplicationsPage from '../../../frontend/src/pages/CandidateApplicationsPage';
+import CandidateJobsView from '../../../frontend/src/pages/CandidateJobsView';
+import CandidateProfilePage from '../../../frontend/src/pages/CandidateProfilePage';
 import EmployerApplicantsPage from '../../../frontend/src/pages/EmployerApplicantsPage';
+import EmployerAvailabilityPage from '../../../frontend/src/pages/EmployerAvailabilityPage';
 import type { ScoredJob } from '../../../frontend/src/types';
 
 /**
@@ -192,6 +196,188 @@ describe('FP-SEC-3 EmployerApplicantsPage renders candidate-controlled text from
     expectInert(container);
     expect(screen.getByRole('heading', { name: `Mallory ${XSS}` })).toBeTruthy(); // the literal text
     expect(container.textContent).toContain(`Dev ${XSS}`);
+    expect(container.innerHTML).not.toContain('<script>');
+  });
+});
+
+describe('FP-SEC-3 profile, resume, applications, availability, and search text stay inert', () => {
+  beforeEach(() => {
+    const store = new Map<string, string>();
+    const mockStorage: Storage = {
+      get length() {
+        return store.size;
+      },
+      clear: () => store.clear(),
+      getItem: (k: string) => store.get(k) ?? null,
+      key: (i: number) => Array.from(store.keys())[i] ?? null,
+      removeItem: (k: string) => {
+        store.delete(k);
+      },
+      setItem: (k: string, v: string) => {
+        store.set(k, String(v));
+      },
+    };
+    Object.defineProperty(globalThis, 'localStorage', { value: mockStorage, configurable: true, writable: true });
+    Object.defineProperty(window, 'localStorage', { value: mockStorage, configurable: true, writable: true });
+  });
+
+  const candAuth = {
+    user: { id: 'cand-1', email: 'c@example.test', role: 'Candidate' as const, display_name: `Alice ${XSS}`, created_at: '2026-01-01T00:00:00Z' },
+    isLoading: false,
+    login: async () => {},
+    register: async () => {},
+    logout: async () => {},
+    previewAs: () => {},
+  };
+
+  const empAuth = {
+    user: { id: 'emp-1', email: 'e@example.test', role: 'Employer' as const, display_name: 'Employer', created_at: '2026-01-01T00:00:00Z' },
+    isLoading: false,
+    login: async () => {},
+    register: async () => {},
+    logout: async () => {},
+    previewAs: () => {},
+  };
+
+  it('CandidateProfilePage keeps hostile display_name, skills, and resume_text inert', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () =>
+        new Response(
+          JSON.stringify({
+            user_id: 'cand-1',
+            display_name: `Alice ${XSS}`,
+            skills: [`python${XSS}`, IMG],
+            resume_text: `Experience: ${XSS} ${SVG}`,
+          }),
+          { status: 200, headers: { 'Content-Type': 'application/json' } },
+        ),
+      ),
+    );
+
+    const { container } = render(
+      <AuthContext.Provider value={candAuth}>
+        <MemoryRouter>
+          <CandidateProfilePage />
+        </MemoryRouter>
+      </AuthContext.Provider>,
+    );
+
+    await screen.findByDisplayValue(`Alice ${XSS}`);
+    expectInert(container);
+    expect(container.textContent).toContain(`Alice ${XSS}`);
+    expect(container.textContent).toContain(`python${XSS}`);
+    expect((screen.getByDisplayValue(`Experience: ${XSS} ${SVG}`) as HTMLTextAreaElement).value).toBe(
+      `Experience: ${XSS} ${SVG}`,
+    );
+    expect(container.innerHTML).not.toContain('<script>');
+  });
+
+  it('CandidateApplicationsPage and EmployerAvailabilityPage keep hostile job/company/candidate booking text inert', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (url: string) => {
+        if (String(url).endsWith('/api/applications/mine')) {
+          return new Response(
+            JSON.stringify([
+              {
+                id: 'app-1',
+                job_id: 'job-1',
+                candidate_id: 'cand-1',
+                status: 'Interviewing',
+                created_at: '2026-01-01T00:00:00Z',
+                interview_slot_id: null,
+                match_score: 100,
+                job: { id: 'job-1', title: `Role ${XSS}`, company_name: `Co ${IMG}` },
+                candidate: { id: 'cand-1', display_name: `Alice ${XSS}`, skills: [] },
+                interview_slot: null,
+              },
+            ]),
+            { status: 200, headers: { 'Content-Type': 'application/json' } },
+          );
+        }
+        return new Response(
+          JSON.stringify([
+            {
+              id: 'slot-1',
+              employer_id: 'emp-1',
+              start_time: '2027-07-01T10:00:00Z',
+              end_time: '2027-07-01T10:30:00Z',
+              is_booked: true,
+              booking: {
+                application_id: 'app-1',
+                job_id: 'job-1',
+                job_title: `Role ${XSS}`,
+                candidate_id: 'cand-1',
+                candidate_display_name: `Mallory ${IMG}`,
+              },
+            },
+          ]),
+          { status: 200, headers: { 'Content-Type': 'application/json' } },
+        );
+      }),
+    );
+
+    const candRender = render(
+      <ToastProvider>
+        <AuthContext.Provider value={candAuth}>
+          <MemoryRouter>
+            <CandidateApplicationsPage />
+          </MemoryRouter>
+        </AuthContext.Provider>
+      </ToastProvider>,
+    );
+    await screen.findByText(`Role ${XSS}`);
+    expectInert(candRender.container);
+    expect(candRender.container.textContent).toContain(`Co ${IMG}`);
+    cleanup();
+
+    const empRender = render(
+      <ToastProvider>
+        <AuthContext.Provider value={empAuth}>
+          <MemoryRouter>
+            <EmployerAvailabilityPage />
+          </MemoryRouter>
+        </AuthContext.Provider>
+      </ToastProvider>,
+    );
+    await screen.findByText(`Booked by Mallory ${IMG} (Role ${XSS})`);
+    expectInert(empRender.container);
+    expect(empRender.container.innerHTML).not.toContain('<script>');
+  });
+
+  it('CandidateJobsView keeps hostile search input and job listings inert', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (url: string) => {
+        if (String(url).endsWith('/api/jobs')) {
+          return new Response(JSON.stringify([hostileJob(XSS)]), {
+            status: 200,
+            headers: { 'Content-Type': 'application/json' },
+          });
+        }
+        return new Response(
+          JSON.stringify({ user_id: 'cand-1', display_name: 'Alice', skills: [], resume_text: '' }),
+          { status: 200, headers: { 'Content-Type': 'application/json' } },
+        );
+      }),
+    );
+
+    const { container } = render(
+      <ToastProvider>
+        <AuthContext.Provider value={candAuth}>
+          <MemoryRouter>
+            <CandidateJobsView />
+          </MemoryRouter>
+        </AuthContext.Provider>
+      </ToastProvider>,
+    );
+
+    await screen.findAllByText(`Dev ${XSS}`);
+    const searchInput = screen.getByLabelText('Search jobs') as HTMLInputElement;
+    fireEvent.change(searchInput, { target: { value: XSS } });
+    expectInert(container);
+    expect(searchInput.value).toBe(XSS);
     expect(container.innerHTML).not.toContain('<script>');
   });
 });
