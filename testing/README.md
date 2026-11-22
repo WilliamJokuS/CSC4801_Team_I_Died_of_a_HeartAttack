@@ -20,6 +20,31 @@ To run the open-bug regression suite (which asserts the expected fixed behavior 
 npm run test:bugs
 ```
 
+### Live PostgreSQL Concurrency Suite
+
+The concurrency regression suite runs separately from `npm test` against a real, disposable PostgreSQL database with all Prisma migrations applied (including the `availability_slots_no_overlap` GiST exclusion constraint). It tests real row locks, exclusion-constraint waits/rollbacks, and transaction serialization using separate `pg` connections, synchronization barriers, and bounded `pg_blocking_pids` polling.
+
+1. Start a local PostgreSQL instance (for example, the development Compose database, which creates `recruiting_test`):
+
+   ```bash
+   docker compose -f backend/docker-compose.dev.yml up -d
+   ```
+
+2. Run the live suite from `testing/` (optionally override `TEST_DATABASE_URL`; defaults to `postgres://app:app@127.0.0.1:5432/recruiting_test` and refuses to run against the main `recruiting` database). Prisma migrations are applied automatically before the suite runs:
+
+   ```bash
+   cd testing
+   TEST_DATABASE_URL=postgres://app:app@127.0.0.1:5432/recruiting_test npm run test:live
+   ```
+
+   On Windows PowerShell:
+
+   ```powershell
+   cd testing
+   $env:TEST_DATABASE_URL = "postgres://app:app@127.0.0.1:5432/recruiting_test"
+   npm run test:live
+   ```
+
 ## Test Files
 
 | File | Requirements Covered | What It Tests |
@@ -37,3 +62,4 @@ npm run test:bugs
 | `src/unit/static-checks.test.ts` | `FP-MATCH-1`, `FP-AUTH-2`, `FP-SEC-2`, `FP-SEC-3`, `FP-SEC-4` | Verifies single `matchScore` implementation, no unsafe raw SQL or HTML injection (`dangerouslySetInnerHTML`), no HTML-escaping on write, `.env.example` placeholder hygiene, and `JWT_SECRET` length enforcement |
 | `src/unit/seed.test.ts` | `FP-ARCH-1`, `FP-DOC-3` | Verifies deterministic `seed.sql` / `reset.sql` (demo accounts, valid `password123` bcrypt hashes, 4 match examples, all 4 application statuses, 2 `Interviewing` candidates racing for a slot) and `/api/health` (`200` vs `503`) |
 | `src/regression/open-bugs.test.tsx` | `FP-EMP-3`, `FP-MATCH-1`, `FP-SCHED-1`, `FP-CAN-1` | Regression tests (`npm run test:bugs`) reproducing open bugs reported to `frontend/` and `backend/`; each test asserts the expected fixed behavior and turns green once its fix lands |
+| `src/live-pg/concurrency.live.test.ts` | `FP-SCHED-1`, `FP-SCHED-2`, `FP-EMP-2` | Live PostgreSQL concurrency regression suite (`npm run test:live`, commit `db6a0f1`): booking lock-wait past start time (`409 SLOT_IN_PAST`), blocked slot creation past start time (`400 VALIDATION_ERROR`), concurrent vs sequential overlapping slot inserts (`201` / `409 SLOT_OVERLAP`), simultaneous job edits serialization, and simultaneous job deletes locked recheck (`204` / `404 NOT_FOUND`) |
