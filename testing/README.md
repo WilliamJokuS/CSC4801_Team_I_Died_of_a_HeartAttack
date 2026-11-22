@@ -6,6 +6,8 @@ Automated unit test suite for the CSC4801 Recruiting & Candidate Matching Platfo
 
 ## Setup & Running Tests
 
+On a clean checkout, also install dependencies in `backend/` and `frontend/` (`npm ci` in each), since this suite imports `../backend/src` and `../frontend/src` directly and `test:live` invokes Prisma from `backend/node_modules`.
+
 ```bash
 cd testing
 npm ci
@@ -14,7 +16,7 @@ npm test
 
 `npm test` runs `vitest run --configLoader native src/unit src/frontend` non-interactively and exits nonzero on failure.
 
-To run the open-bug regression suite (which asserts the expected fixed behavior for bugs reported to `frontend/` and `backend/`):
+To run the bug regression suite (which asserts the expected fixed behavior for bugs reported to `frontend/` and `backend/` — failing while open and turning green once fixed):
 
 ```bash
 npm run test:bugs
@@ -63,5 +65,5 @@ The concurrency regression suite runs separately from `npm test` against a real,
 | `src/frontend/pages-coverage.test.tsx` | `FP-CAN-1`, `FP-CAN-2`, `FP-CAN-3`, `FP-EMP-1`, `FP-EMP-2`, `FP-EMP-3`, `FP-SCHED-1`, `FP-SCHED-2` | Full page workflow tests for `CandidateProfilePage`, `CandidateJobsView`, `CandidateApplicationsPage`, `CandidateBookInterviewPage`, `CandidateOverviewPage`, `EmployerProfilePage`, `EmployerJobFormPage` (create/edit/full PUT tags/ownership guard), `EmployerDashboardPage` (`409 JOB_HAS_DEPENDENTS`), `EmployerApplicantsPage`, and `EmployerAvailabilityPage` (create, `409 SLOT_OVERLAP`, booked delete guard, delete) |
 | `src/unit/static-checks.test.ts` | `FP-MATCH-1`, `FP-AUTH-2`, `FP-SEC-2`, `FP-SEC-3`, `FP-SEC-4` | Verifies single `matchScore` implementation, no unsafe raw SQL or HTML injection (`dangerouslySetInnerHTML`), no HTML-escaping on write, `.env.example` placeholder hygiene, and `JWT_SECRET` length enforcement |
 | `src/unit/seed.test.ts` | `FP-ARCH-1`, `FP-DOC-3` | Verifies deterministic `seed.sql` / `reset.sql` (demo accounts, valid `password123` bcrypt hashes, 4 match examples, all 4 application statuses, 2 `Interviewing` candidates racing for a slot) and `/api/health` (`200` vs `503`) |
-| `src/regression/open-bugs.test.tsx` | `FP-AUTH-1`, `FP-CAN-1`, `FP-EMP-2`, `FP-EMP-3`, `FP-MATCH-1`, `FP-SCHED-1`, `FP-SCHED-3` | Regression tests (`npm run test:bugs`) reproducing open bugs reported to `frontend/` (`BUG-FE-1`..`BUG-FE-14`) and `backend/` (`BUG-BE-1`..`BUG-BE-3`); each test asserts the expected fixed behavior and turns green once its fix lands |
+| `src/regression/open-bugs.test.tsx` | `FP-AUTH-1`, `FP-CAN-1`, `FP-EMP-2`, `FP-EMP-3`, `FP-MATCH-1`, `FP-SCHED-1`, `FP-SCHED-3` | Regression tests (`npm run test:bugs`) for bugs reported to `frontend/` (13 open: `BUG-FE-1`, `BUG-FE-2`, `BUG-FE-4`..`BUG-FE-14`; former `BUG-FE-3` is covered in `auth-and-routing.test.tsx`) and `backend/` (3 fixed/passing since `db6a0f1`: `BUG-BE-1`..`BUG-BE-3`); each test asserts the expected fixed behavior and turns green once its fix lands |
 | `src/live-pg/concurrency.live.test.ts` | `FP-SCHED-1`, `FP-SCHED-2`, `FP-EMP-2` | Live PostgreSQL concurrency regression suite (`npm run test:live`, commit `db6a0f1`): booking lock-wait past start time (`409 SLOT_IN_PAST`), blocked slot creation past start time (`400 VALIDATION_ERROR`), concurrent vs sequential overlapping slot inserts (`201` / `409 SLOT_OVERLAP`), simultaneous job edits serialization, and simultaneous job deletes locked recheck (`204` / `404 NOT_FOUND`) |
