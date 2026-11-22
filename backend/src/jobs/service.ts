@@ -112,15 +112,17 @@ export async function getJob(deps: JobDeps, jobId: string): Promise<Job> {
 export async function updateJob(deps: JobDeps, employerId: string, jobId: string, input: unknown): Promise<Job> {
   await loadOwnedJob(deps, employerId, jobId);
   const data = jobInputSchema.parse(input);
-  // Conditional on is_active in the same statement, so a delete that commits after the check
-  // above can't be followed by an edit of the now-deleted job.
-  const { count } = await deps.prisma.job.updateMany({
-    where: { id: jobId, employerId, isActive: true },
-    data: { title: data.title, description: data.description, requiredSkills: data.required_skills, tags: data.tags },
+  return deps.prisma.$transaction(async (tx) => {
+    // The active check prevents edits after deletion. Hold the update lock until the
+    // response row has been read so a concurrent edit can't replace its values.
+    const { count } = await tx.job.updateMany({
+      where: { id: jobId, employerId, isActive: true },
+      data: { title: data.title, description: data.description, requiredSkills: data.required_skills, tags: data.tags },
+    });
+    if (count === 0) throw notFound('Job not found');
+    const job = await tx.job.findUniqueOrThrow({ where: { id: jobId }, include: jobInclude });
+    return toJob(job);
   });
-  if (count === 0) throw notFound('Job not found');
-  const job = await deps.prisma.job.findUniqueOrThrow({ where: { id: jobId }, include: jobInclude });
-  return toJob(job);
 }
 
 /**
@@ -135,7 +137,9 @@ export async function updateJob(deps: JobDeps, employerId: string, jobId: string
 export async function deleteJob(deps: JobDeps, employerId: string, jobId: string): Promise<void> {
   await loadOwnedJob(deps, employerId, jobId);
   await deps.prisma.$transaction(async (tx) => {
-    await tx.$queryRaw`SELECT id FROM jobs WHERE id = ${jobId}::uuid FOR UPDATE`;
+    const jobs = await tx.$queryRaw<{ id: string }[]>`
+      SELECT id FROM jobs WHERE id = ${jobId}::uuid AND is_active FOR UPDATE`;
+    if (jobs.length === 0) throw notFound('Job not found');
     const applications = await tx.application.count({ where: { jobId } });
     if (applications > 0) {
       throw conflict('Job has applications and cannot be deleted', 'JOB_HAS_DEPENDENTS');

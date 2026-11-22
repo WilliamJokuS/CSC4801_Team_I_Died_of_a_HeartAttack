@@ -6,8 +6,9 @@ import { bookSlot, listAvailableSlots } from '../scheduling/service.js';
 
 export function applicationsRouter(deps: ApplicationDeps & { jwtSecret: string }): Router {
   const router = Router();
-  const candidate = [requireAuth(deps.jwtSecret), requireRole('Candidate')];
-  const employer = [requireAuth(deps.jwtSecret), requireRole('Employer')];
+  const authenticated = requireAuth(deps.jwtSecret, deps.prisma);
+  const candidate = [authenticated, requireRole('Candidate')];
+  const employer = [authenticated, requireRole('Employer')];
 
   router.get('/applications/mine', ...candidate, async (req, res) => {
     res.json(await listMyApplications(deps, req.auth!.sub));

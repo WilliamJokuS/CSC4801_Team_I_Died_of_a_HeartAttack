@@ -5,7 +5,7 @@ import { createSlot, deleteSlot, listMySlots, type SchedulingDeps } from '../sch
 
 export function schedulingRouter(deps: SchedulingDeps & { jwtSecret: string }): Router {
   const router = Router();
-  const employer = [requireAuth(deps.jwtSecret), requireRole('Employer')];
+  const employer = [requireAuth(deps.jwtSecret, deps.prisma), requireRole('Employer')];
 
   router.get('/employers/me/availability', ...employer, async (req, res) => {
     res.json(await listMySlots(deps, req.auth!.sub));

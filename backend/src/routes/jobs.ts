@@ -6,7 +6,7 @@ import { apply, listApplicants, listScoredJobs } from '../applications/service.j
 
 export function jobsRouter(deps: JobDeps & { jwtSecret: string }): Router {
   const router = Router();
-  const authenticated = requireAuth(deps.jwtSecret);
+  const authenticated = requireAuth(deps.jwtSecret, deps.prisma);
   const candidate = [authenticated, requireRole('Candidate')];
   const employer = [authenticated, requireRole('Employer')];
 
