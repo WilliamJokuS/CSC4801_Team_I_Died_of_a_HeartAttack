@@ -7,6 +7,7 @@
   "scripts": {
     "test": "vitest run --configLoader native src/unit src/frontend",
     "test:bugs": "vitest run --configLoader native src/regression",
+    "test:live": "vitest run --configLoader native src/live-pg",
     "test:watch": "vitest --configLoader native src/unit src/frontend"
   },
   "license": "MIT",
@@ -14,11 +15,14 @@
     "node": ">=22"
   },
   "devDependencies": {
+    "@prisma/adapter-pg": "^7.10.1",
     "@testing-library/dom": "^10.4.2",
     "@testing-library/react": "^16.3.3",
+    "@types/pg": "^8.23.1",
     "@vitejs/plugin-react": "^6.2.1",
     "jsdom": "^29.1.1",
     "light-my-request": "^6.8.0",
+    "pg": "^8.23.1",
     "react": "^19.3.1",
     "react-dom": "^19.3.1",
     "react-router-dom": "^7.18.5",
