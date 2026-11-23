@@ -57,7 +57,7 @@ Whoever finishes their side flips the status. Whoever finds a mismatch sets it t
 | Endpoint | Status | Notes |
 |---|---|---|
 | `GET /api/employers/me/availability` | Backend done | Returns `EmployerSlot[]` (`booking`) per [specs/004](../specs/004-job-tags-and-ui-fields.md) |
-| `POST /api/employers/me/availability` | Backend done | Shape in [specs/003](../specs/003-application-and-scheduling-shapes.md); times need `Z` or an offset |
+| `POST /api/employers/me/availability` | Both done | Times require `Z` or an offset. The API returns `409 SLOT_OVERLAP` when the same employer has an overlapping slot. See [specs/003](../specs/003-application-and-scheduling-shapes.md) and [specs/005](../specs/005-slot-overlap-and-schema-sync.md). |
 | `DELETE /api/employers/me/availability/{id}` | Backend done | Shape in [specs/003](../specs/003-application-and-scheduling-shapes.md); `409 SLOT_BOOKED` |
 | `GET /api/applications/{id}/available-slots` | Backend done | Shape in [specs/003](../specs/003-application-and-scheduling-shapes.md) |
 | `POST /api/applications/{id}/book` | Backend done | Shape in [specs/003](../specs/003-application-and-scheduling-shapes.md); atomic, `409 SLOT_TAKEN` on a lost race |
