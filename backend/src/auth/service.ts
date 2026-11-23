@@ -2,7 +2,7 @@ import { z } from 'zod';
 import type { PrismaClient } from '../generated/prisma/client.js';
 import { Prisma } from '../generated/prisma/client.js';
 import { conflict, unauthorized } from '../lib/errors.js';
-import { DUMMY_HASH, hashPassword, verifyPassword } from './password.js';
+import { DUMMY_HASH, hashPassword, isBcryptCompatiblePassword, verifyPassword } from './password.js';
 import { signToken } from './jwt.js';
 
 /** The `AuthUser` shape returned by the auth endpoints and GET /api/me. Never includes password_hash. */
@@ -33,11 +33,10 @@ const email = z
 
 export const registerSchema = z.object({
   email,
-  // bcrypt only uses the first 72 bytes; reject longer instead of silently truncating.
   password: z
     .string()
     .min(8, 'must be at least 8 characters')
-    .refine((p) => Buffer.byteLength(p, 'utf8') <= 72, 'must be at most 72 bytes'),
+    .refine(isBcryptCompatiblePassword, 'must be at most 72 bytes and contain no NUL characters'),
   display_name: z.string().trim().min(1, 'must not be empty').max(100),
   role: z.enum(['Candidate', 'Employer']),
 });
