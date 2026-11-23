@@ -7,6 +7,9 @@ interface SkillsFieldProps {
   inputId?: string
   label?: string
   hint?: string
+  /** Optional controlled draft text, so the parent form can commit it on submit. */
+  draft?: string
+  onDraftChange?: (draft: string) => void
 }
 
 function SkillsField({
@@ -15,8 +18,12 @@ function SkillsField({
   inputId = 'skill_input',
   label = 'Required skills',
   hint = 'Press Enter or comma to add each skill (max 50).',
+  draft,
+  onDraftChange,
 }: SkillsFieldProps) {
-  const [skillInput, setSkillInput] = useState('')
+  const [localInput, setLocalInput] = useState('')
+  const skillInput = draft ?? localInput
+  const setSkillInput = (value: string) => (onDraftChange ? onDraftChange(value) : setLocalInput(value))
 
   function addSkill(raw: string) {
     const trimmed = raw.trim().slice(0, LIMITS.skillMaxLength)

@@ -21,7 +21,7 @@ import type {
   ScoredJob,
   SlotInput,
 } from '../types';
-import { request, setToken } from './client';
+import { getToken, request, setToken } from './client';
 
 const id = (value: string) => encodeURIComponent(value);
 
@@ -36,10 +36,15 @@ export const authApi = {
     setToken(res.token);
     return res;
   },
-  /** Stateless on the server; the token is discarded here even if the call fails. */
+  /**
+   * Stateless on the server, so this never throws: the token is discarded here whether or not
+   * the call succeeds (offline, 5xx, or already logged out in another tab).
+   */
   async logout(): Promise<void> {
     try {
-      await request<void>('POST', '/auth/logout');
+      if (getToken()) await request<void>('POST', '/auth/logout');
+    } catch {
+      // Nothing to undo server-side; the local session is cleared below regardless.
     } finally {
       setToken(null);
     }

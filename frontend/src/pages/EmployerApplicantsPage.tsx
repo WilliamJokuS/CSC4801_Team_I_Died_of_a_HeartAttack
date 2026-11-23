@@ -189,7 +189,7 @@ function EmployerApplicantsPage() {
       {applicants.length > 0 && (
         <p className="mt-3 text-sm text-muted">
           {applicants.length} applicant{applicants.length === 1 ? '' : 's'} · {summary.Pending} pending ·{' '}
-          {summary.Interviewing} interviewing · {summary.Accepted} accepted
+          {summary.Interviewing} interviewing · {summary.Accepted} accepted · {summary.Rejected} rejected
         </p>
       )}
 
@@ -256,21 +256,24 @@ function EmployerApplicantsPage() {
                   </p>
                 )}
 
-                {required.length > 0 && (
-                  <ul className="mt-3 flex flex-wrap gap-2">
-                    {required.map((skill) => (
+                {/* FP-EMP-3: show all of the candidate's skills; ones the job requires are highlighted. */}
+                {candidateSkills.length > 0 ? (
+                  <ul className="mt-3 flex flex-wrap gap-2" aria-label="Candidate skills">
+                    {candidateSkills.map((skill) => (
                       <li
                         key={skill}
                         className={`rounded-full px-2.5 py-0.5 text-xs ${
-                          candidateHasSkill(candidateSkills, skill)
+                          candidateHasSkill(required, skill)
                             ? 'bg-green-100 text-green-800'
-                            : 'bg-gray-100 text-gray-500 line-through'
+                            : 'bg-gray-100 text-gray-700'
                         }`}
                       >
                         {skill}
                       </li>
                     ))}
                   </ul>
+                ) : (
+                  <p className="mt-3 text-xs text-muted">No skills listed.</p>
                 )}
 
                 <dl className="mt-4 grid gap-3 text-sm sm:grid-cols-2">

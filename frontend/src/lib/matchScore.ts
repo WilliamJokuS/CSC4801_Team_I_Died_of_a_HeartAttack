@@ -23,16 +23,20 @@ export function calculateMatchScore(candidateSkills: string[], requiredSkills: s
   return Math.floor((100 * overlap) / required.length)
 }
 
+// Must match backend/src/matching/index.ts exactly: lowercase, then code-unit comparison
+// (not localeCompare), so preview ordering equals the real API ordering on every machine.
+function compareText(a: string, b: string): number {
+  return a < b ? -1 : a > b ? 1 : 0
+}
+
+/** Score desc, then case-insensitive title, then job id (same as the backend). */
 export function compareScoredJobs(
   a: { match_score: number; title: string; id: string },
   b: { match_score: number; title: string; id: string },
 ): number {
-  if (b.match_score !== a.match_score) {
-    return b.match_score - a.match_score
-  }
-  const titleCompare = a.title.localeCompare(b.title, undefined, { sensitivity: 'accent' })
-  if (titleCompare !== 0) {
-    return titleCompare
-  }
-  return a.id.localeCompare(b.id)
+  return (
+    b.match_score - a.match_score ||
+    compareText(a.title.toLowerCase(), b.title.toLowerCase()) ||
+    compareText(a.id, b.id)
+  )
 }

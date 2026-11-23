@@ -19,6 +19,10 @@ function EmployerProfilePage() {
   const [error, setError] = useState<string | null>(null)
   const [success, setSuccess] = useState<string | null>(null)
   const [loadWarning, setLoadWarning] = useState<string | null>(null)
+  // The PUT replaces the whole company profile, so saving after a failed load would wipe the
+  // stored description. Saving stays blocked until a load succeeds.
+  const [loadError, setLoadError] = useState<string | null>(null)
+  const [reloadKey, setReloadKey] = useState(0)
 
   useEffect(() => {
     let cancelled = false
@@ -27,6 +31,7 @@ function EmployerProfilePage() {
       setIsLoading(true)
       setError(null)
       setLoadWarning(null)
+      setLoadError(null)
 
       if (previewMode) {
         const profile = loadPreviewCompanyProfile()
@@ -49,7 +54,7 @@ function EmployerProfilePage() {
         }
       } catch (err) {
         if (!cancelled) {
-          setLoadWarning(`Could not load profile (${apiErrorMessage(err)}). You can still edit and save.`)
+          setLoadError(`Could not load your company profile (${apiErrorMessage(err)}).`)
         }
       } finally {
         if (!cancelled) {
@@ -62,12 +67,15 @@ function EmployerProfilePage() {
     return () => {
       cancelled = true
     }
-  }, [previewMode])
+  }, [previewMode, user?.id, reloadKey])
 
   async function handleSubmit(event: FormEvent) {
     event.preventDefault()
     setError(null)
     setSuccess(null)
+    if (loadError) {
+      return
+    }
     setIsSaving(true)
 
     const payload = {
@@ -102,6 +110,23 @@ function EmployerProfilePage() {
       <div className="flex min-h-[40vh] items-center justify-center">
         <LoadingScreen />
       </div>
+    )
+  }
+
+  if (loadError) {
+    return (
+      <>
+        <h1 className="text-2xl font-semibold text-gray-900">Company profile</h1>
+        <div role="alert" className="mt-4 rounded-md border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">
+          <p>{loadError}</p>
+          <p className="mt-1">
+            Editing is disabled until your saved profile loads, so nothing you saved before gets overwritten.
+          </p>
+          <button type="button" onClick={() => setReloadKey((key) => key + 1)} className="btn-secondary mt-3">
+            Retry
+          </button>
+        </div>
+      </>
     )
   }
 

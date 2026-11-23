@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type FormEvent } from 'react'
+import { useEffect, useMemo, useRef, useState, type FormEvent } from 'react'
 import { Link } from 'react-router-dom'
 import { profileApi } from '../api/endpoints'
 import LoadingScreen from '../components/LoadingScreen'
@@ -6,7 +6,7 @@ import SkillsField from '../components/SkillsField'
 import { useAuth } from '../hooks/useAuth'
 import { apiErrorMessage } from '../lib/apiErrorMessage'
 import { initialsFromDisplayName } from '../lib/companyLogoStyle'
-import { stringArraysEqual } from '../lib/formChange'
+import { stringArraysEqual, withDraftEntry } from '../lib/formChange'
 import { LIMITS } from '../lib/formLimits'
 import { isPreviewUser, PREVIEW_PROFILE_KEY } from '../lib/preview'
 
@@ -50,11 +50,18 @@ function savePreviewProfile(profile: {
 const RESUME_MAX = 20_000
 
 function CandidateProfilePage() {
-  const { user } = useAuth()
+  const { user, updateUser } = useAuth()
   const previewMode = isPreviewUser(user?.id)
+  // Only a fallback while loading; read through a ref so updating the header name after a
+  // save (updateUser) doesn't re-trigger the load effect and reload the whole form.
+  const fallbackNameRef = useRef(user?.display_name ?? '')
+  useEffect(() => {
+    fallbackNameRef.current = user?.display_name ?? ''
+  }, [user?.display_name])
 
   const [displayName, setDisplayName] = useState('')
   const [skills, setSkills] = useState<string[]>([])
+  const [skillDraft, setSkillDraft] = useState('')
   const [resumeText, setResumeText] = useState('')
 
   const [isLoading, setIsLoading] = useState(true)
@@ -62,6 +69,10 @@ function CandidateProfilePage() {
   const [error, setError] = useState<string | null>(null)
   const [success, setSuccess] = useState<string | null>(null)
   const [loadWarning, setLoadWarning] = useState<string | null>(null)
+  // The PUT replaces the whole profile, so saving after a failed load would overwrite the real
+  // skills/résumé with blanks. Saving stays blocked until a load succeeds.
+  const [loadError, setLoadError] = useState<string | null>(null)
+  const [reloadKey, setReloadKey] = useState(0)
   const [saved, setSaved] = useState({ displayName: '', skills: [] as string[], resumeText: '' })
 
   useEffect(() => {
@@ -71,9 +82,10 @@ function CandidateProfilePage() {
       setIsLoading(true)
       setError(null)
       setLoadWarning(null)
+      setLoadError(null)
 
       if (previewMode) {
-        const preview = loadPreviewProfile(user?.display_name ?? '')
+        const preview = loadPreviewProfile(fallbackNameRef.current)
         if (!cancelled) {
           setDisplayName(preview.display_name)
           setSkills(preview.skills)
@@ -103,10 +115,7 @@ function CandidateProfilePage() {
         }
       } catch (err) {
         if (!cancelled) {
-          setDisplayName(user?.display_name ?? '')
-          setSkills([])
-          setResumeText('')
-          setLoadWarning(`Could not load profile (${apiErrorMessage(err)}). You can still edit and save.`)
+          setLoadError(`Could not load your profile (${apiErrorMessage(err)}).`)
         }
       } finally {
         if (!cancelled) {
@@ -119,12 +128,16 @@ function CandidateProfilePage() {
     return () => {
       cancelled = true
     }
-  }, [previewMode, user?.display_name])
+  }, [previewMode, user?.id, reloadKey])
 
   async function handleSubmit(event: FormEvent) {
     event.preventDefault()
     setError(null)
     setSuccess(null)
+
+    if (loadError) {
+      return
+    }
 
     if (resumeText.length > RESUME_MAX) {
       setError(`Resume must be at most ${RESUME_MAX.toLocaleString()} characters.`)
@@ -133,9 +146,14 @@ function CandidateProfilePage() {
 
     setIsSaving(true)
 
+    // Include a skill that was typed but not yet added with Enter / "Add".
+    const skillsToSave = withDraftEntry(skills, skillDraft, LIMITS.skillMaxLength, LIMITS.skillsMaxCount)
+    setSkills(skillsToSave)
+    setSkillDraft('')
+
     const payload = {
       display_name: displayName.trim(),
-      skills,
+      skills: skillsToSave,
       resume_text: resumeText,
     }
 
@@ -147,6 +165,7 @@ function CandidateProfilePage() {
           skills: payload.skills,
           resumeText: payload.resume_text,
         })
+        updateUser?.({ display_name: payload.display_name })
         setSuccess('Profile saved locally (preview mode).')
       } else {
         const updated = await profileApi.updateCandidate(payload)
@@ -158,6 +177,7 @@ function CandidateProfilePage() {
           skills: updated.skills,
           resumeText: updated.resume_text,
         })
+        updateUser?.({ display_name: updated.display_name })
         setSuccess('Profile saved.')
       }
     } catch (err) {
@@ -171,14 +191,29 @@ function CandidateProfilePage() {
     () =>
       displayName.trim() !== saved.displayName.trim() ||
       !stringArraysEqual(skills, saved.skills) ||
+      skillDraft.trim() !== '' ||
       resumeText !== saved.resumeText,
-    [displayName, resumeText, saved, skills],
+    [displayName, resumeText, saved, skillDraft, skills],
   )
 
   if (isLoading) {
     return (
       <div className="flex min-h-[40vh] items-center justify-center">
         <LoadingScreen />
+      </div>
+    )
+  }
+
+  if (loadError) {
+    return (
+      <div role="alert" className="rounded-panel border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">
+        <p>{loadError}</p>
+        <p className="mt-1">
+          Editing is disabled until your saved profile loads, so nothing you saved before gets overwritten.
+        </p>
+        <button type="button" onClick={() => setReloadKey((key) => key + 1)} className="btn-secondary mt-3">
+          Retry
+        </button>
       </div>
     )
   }
@@ -232,27 +267,20 @@ function CandidateProfilePage() {
                 {displayName.length} / {LIMITS.displayNameMaxLength}
               </span>
             </label>
-            <label className="flex flex-col gap-2 text-xs font-bold text-[#5d6e62] sm:col-span-2">
-              Skills (used for match scores)
+            {/* A div, not a <label>: SkillsField contains buttons, which can't live inside a label. */}
+            <div className="flex flex-col gap-2 text-xs font-bold text-[#5d6e62] sm:col-span-2">
+              <label htmlFor="profile_skills">Skills (used for match scores)</label>
               <SkillsField
                 skills={skills}
                 onChange={setSkills}
+                draft={skillDraft}
+                onDraftChange={setSkillDraft}
                 inputId="profile_skills"
                 label=""
                 hint="Press Enter to add each skill."
               />
-            </label>
-          </div>
-
-          {skills.length > 0 && (
-            <div className="my-4 flex flex-wrap gap-2">
-              {skills.map((skill) => (
-                <span key={skill} className="rounded-[20px] bg-[#ecf4ed] px-3 py-2 text-xs font-bold text-[#387151]">
-                  {skill}
-                </span>
-              ))}
             </div>
-          )}
+          </div>
 
           {error && <p className="text-sm text-red-600">{error}</p>}
           {success && <p className="text-sm text-green-700">{success}</p>}

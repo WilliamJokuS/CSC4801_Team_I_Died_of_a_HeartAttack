@@ -9,7 +9,8 @@ const styles: Record<ApplicationStatus, string> = {
 
 function labelFor(status: ApplicationStatus, interviewBooked: boolean): string {
   if (status === 'Interviewing') {
-    return interviewBooked ? 'Interview booked' : 'Invited'
+    // Always show the canonical status name (FP-CAN-3 / FP-EMP-3).
+    return interviewBooked ? 'Interviewing · Booked' : 'Interviewing'
   }
   return status
 }

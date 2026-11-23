@@ -15,7 +15,6 @@ import { formatDateTime } from '../lib/formatDateTime'
 import {
   clampSlotStartInput,
   minDateTimeLocalNow,
-  roundToHalfHourLocal,
   toLocalDateTimeInputValue,
 } from '../lib/slotTimeInput'
 import type { EmployerSlot } from '../types'
@@ -114,15 +113,22 @@ function EmployerAvailabilityPage() {
   async function handleCreate(event: FormEvent) {
     event.preventDefault()
     setActionError(null)
-    setIsCreating(true)
 
-    const rounded = roundToHalfHourLocal(startInput)
-    const start = new Date(rounded)
+    // Validate before touching isCreating so a bad value can never leave the button stuck.
+    const clamped = clampSlotStartInput(startInput, minInput)
+    const start = new Date(clamped)
+    if (!clamped || Number.isNaN(start.getTime())) {
+      setActionError('Please choose a valid start date and time.')
+      return
+    }
+    setStartInput(clamped)
     const end = new Date(start.getTime() + 30 * 60 * 1000)
     const payload = {
       start_time: start.toISOString(),
       end_time: end.toISOString(),
     }
+
+    setIsCreating(true)
 
     try {
       if (previewMode) {
@@ -136,6 +142,8 @@ function EmployerAvailabilityPage() {
           ),
         )
       }
+      // Move to the next half hour so clicking "Add slot" again doesn't submit the same time.
+      setStartInput(toLocalDateTimeInputValue(end))
       pushToast('Availability slot added', 'success')
     } catch (err) {
       setActionError(apiErrorMessage(err, 'Could not create slot. Please try again.'))
@@ -255,9 +263,9 @@ function EmployerAvailabilityPage() {
           step={1800}
           min={minInput}
           value={startInput}
-          onChange={(e) =>
-            setStartInput(clampSlotStartInput(e.target.value, minInput))
-          }
+          // Store raw keystrokes; rounding to :00/:30 happens on blur and submit, otherwise
+          // typing "3" on the way to ":30" would snap straight back to ":00".
+          onChange={(e) => setStartInput(e.target.value)}
           onBlur={() => setStartInput((value) => clampSlotStartInput(value, minInput))}
           className="input-field mt-2 max-w-xs py-2"
         />

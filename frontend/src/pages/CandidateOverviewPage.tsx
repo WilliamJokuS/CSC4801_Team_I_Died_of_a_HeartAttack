@@ -71,7 +71,8 @@ function CandidateOverviewPage() {
     [applications, savedCount],
   )
 
-  const recommended = jobs.slice(0, 3)
+  // FP-CAN-2: the dashboard lists every current job (already sorted by the server).
+  const recommended = jobs
   const recentApps = applications.slice(0, 3)
   const firstName = displayName.split(/\s+/)[0] || displayName
 
@@ -175,11 +176,20 @@ function CandidateOverviewPage() {
                     {job.company_name}
                     {(job.tags ?? [])[0] ? ` · ${(job.tags ?? [])[0]}` : ''}
                   </span>
+                  <p className="mt-1 text-[11px] text-[#5a667a]">
+                    {(job.required_skills ?? []).length > 0
+                      ? `Requires: ${(job.required_skills ?? []).join(', ')}`
+                      : 'No required skills'}
+                  </p>
                 </div>
                 <span className="rounded-[7px] bg-[#edf3ff] px-2 py-1.5 text-[11px] font-bold text-[#295fc8]">
                   {job.match_score}% match
                 </span>
-                <Link to="/candidate/jobs" className="btn-secondary px-3 py-2 text-xs">
+                <Link
+                  to={`/candidate/jobs?job=${encodeURIComponent(job.id)}`}
+                  className="btn-secondary px-3 py-2 text-xs"
+                  title={`View ${job.title}`}
+                >
                   View
                 </Link>
               </div>

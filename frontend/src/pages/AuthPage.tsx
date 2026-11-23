@@ -9,6 +9,9 @@ import { safeReturnPath } from '../lib/returnPath'
 import type { Role } from '../types'
 
 const REMEMBER_KEY = 'csc4801.rememberEmail'
+const DEMO_EMAIL = 'alice@demo.test'
+const DEMO_PASSWORD = 'password123'
+const DEMO_MESSAGE = 'Demo credentials filled. Click “Log in to SkillMatch” to continue.'
 
 type AuthMode = 'login' | 'register'
 
@@ -29,14 +32,24 @@ function AuthPage() {
   const [message, setMessage] = useState<{ text: string; type: 'error' | 'success' | 'info' } | null>(null)
   const [isSubmitting, setIsSubmitting] = useState(false)
 
+  const demoRequested = Boolean((location.state as { demo?: boolean } | null)?.demo)
+
   useEffect(() => {
+    // Arrived via "Explore with demo account" from /register: the demo credentials win over
+    // the remembered email, and the confirmation stays visible.
+    if (demoRequested && mode === 'login') {
+      setEmail(DEMO_EMAIL)
+      setPassword(DEMO_PASSWORD)
+      setMessage({ type: 'success', text: DEMO_MESSAGE })
+      return
+    }
     setMessage(null)
     const stored = localStorage.getItem(REMEMBER_KEY)
     if (stored && mode === 'login') {
       setEmail(stored)
       setRemember(true)
     }
-  }, [mode])
+  }, [mode, demoRequested])
 
   if (isLoading) {
     return <LoadingScreen />
@@ -65,13 +78,15 @@ function AuthPage() {
   }
 
   function fillDemoCredentials() {
-    setEmail('alice@demo.test')
-    setPassword('password123')
-    switchMode('login')
-    setMessage({
-      type: 'success',
-      text: 'Demo credentials filled. Click “Log in to SkillMatch” to continue.',
-    })
+    setEmail(DEMO_EMAIL)
+    setPassword(DEMO_PASSWORD)
+    setMessage({ type: 'success', text: DEMO_MESSAGE })
+    if (mode !== 'login') {
+      // Carry the request in navigation state so the mode-switch effect doesn't replace the
+      // demo email with the remembered one. Keep `from` so the return path still works.
+      const state = (location.state as Record<string, unknown> | null) ?? {}
+      navigate('/login', { replace: true, state: { ...state, demo: true } })
+    }
   }
 
   async function handleSubmit(event: FormEvent) {
