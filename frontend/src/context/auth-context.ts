@@ -8,6 +8,8 @@ export interface AuthContextValue {
   register: (input: RegisterInput) => Promise<void>
   logout: () => Promise<void>
   previewAs: (role: Role) => void
+  /** Optional so test fixtures and other providers that don't need it can omit it. */
+  updateUser?: (patch: Partial<Pick<AuthUser, 'display_name'>>) => void
 }
 
 export const AuthContext = createContext<AuthContextValue | null>(null)

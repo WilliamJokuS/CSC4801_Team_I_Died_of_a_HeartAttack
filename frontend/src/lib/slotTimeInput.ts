@@ -48,6 +48,10 @@ export function minDateTimeLocalNow(): string {
 
 /** Keep value on :00/:30 and not before min (datetime-local string compare). */
 export function clampSlotStartInput(value: string, min: string): string {
+  // Empty stays empty (the user is clearing the field); `required` + submit validation handle it.
+  if (!value) {
+    return value
+  }
   let next = roundToHalfHourLocal(value)
   if (min && next < min) {
     next = min

@@ -41,7 +41,8 @@ function CandidateBookInterviewPage() {
     setIsLoading(true)
     setLoadError(null)
     setInfoMessage(null)
-    setBookError(null)
+    // bookError is deliberately not cleared here: after a 409 SLOT_TAKEN the page reloads the
+    // slot list and the explanation must stay visible. handleBook clears it on the next try.
 
     if (previewMode) {
       const previewApplication = getPreviewApplicationById(applicationId)
@@ -102,7 +103,9 @@ function CandidateBookInterviewPage() {
       })
     } catch (err) {
       if (err instanceof ApiError && err.code === 'SLOT_TAKEN') {
-        setBookError(apiErrorMessage(err))
+        setBookError('That slot was just booked by someone else. Please pick another slot.')
+        // The taken slot disappears from the reloaded list; don't leave it selected.
+        setSelectedSlotId(null)
         void loadPage()
       } else {
         setBookError(apiErrorMessage(err, 'Could not book the slot. Please try again.'))
@@ -149,7 +152,7 @@ function CandidateBookInterviewPage() {
         </p>
 
         <div className="mt-4 flex flex-wrap items-center gap-2">
-          <ApplicationStatusBadge status={application.status} />
+          <ApplicationStatusBadge status={application.status} interviewBooked={alreadyBooked} />
           {alreadyBooked && (
             <span className="text-sm text-gray-600">{interviewSummary(application)}</span>
           )}
@@ -158,6 +161,13 @@ function CandidateBookInterviewPage() {
         {infoMessage && (
           <p className="mt-4 rounded-md border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
             {infoMessage}
+          </p>
+        )}
+
+        {/* Outside the slot list so it stays visible even if no slots are left after a conflict. */}
+        {bookError && (
+          <p role="alert" className="mt-4 rounded-md border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+            {bookError}
           </p>
         )}
 
@@ -204,8 +214,6 @@ function CandidateBookInterviewPage() {
                 ))}
               </ul>
             </fieldset>
-
-            {bookError && <p className="text-sm text-red-600">{bookError}</p>}
 
             <button
               type="button"

@@ -7,7 +7,7 @@ import TagsField from '../components/TagsField'
 import { ApiError } from '../api/client'
 import { useAuth } from '../hooks/useAuth'
 import { apiErrorMessage } from '../lib/apiErrorMessage'
-import { stringArraysEqual } from '../lib/formChange'
+import { stringArraysEqual, withDraftEntry } from '../lib/formChange'
 import { LIMITS } from '../lib/formLimits'
 import {
   createPreviewEmployerJob,
@@ -30,6 +30,8 @@ function EmployerJobFormPage() {
   const [description, setDescription] = useState('')
   const [requiredSkills, setRequiredSkills] = useState<string[]>([])
   const [tags, setTags] = useState<string[]>([])
+  const [skillDraft, setSkillDraft] = useState('')
+  const [tagDraft, setTagDraft] = useState('')
   const [savedSnapshot, setSavedSnapshot] = useState({
     title: '',
     description: '',
@@ -124,6 +126,9 @@ function EmployerJobFormPage() {
   }, [isEdit, jobId, previewMode, user?.id])
 
   const isDirty = useMemo(() => {
+    if (skillDraft.trim() !== '' || tagDraft.trim() !== '') {
+      return true
+    }
     if (!isEdit) {
       return (
         title.trim().length > 0 ||
@@ -138,18 +143,26 @@ function EmployerJobFormPage() {
       !stringArraysEqual(requiredSkills, savedSnapshot.requiredSkills) ||
       !stringArraysEqual(tags, savedSnapshot.tags)
     )
-  }, [description, isEdit, requiredSkills, savedSnapshot, tags, title])
+  }, [description, isEdit, requiredSkills, savedSnapshot, skillDraft, tagDraft, tags, title])
 
   async function handleSubmit(event: FormEvent) {
     event.preventDefault()
     setError(null)
     setIsSaving(true)
 
+    // Include a skill/tag that was typed but not yet added with Enter / "Add".
+    const skillsToSave = withDraftEntry(requiredSkills, skillDraft, LIMITS.skillMaxLength, LIMITS.skillsMaxCount)
+    const tagsToSave = withDraftEntry(tags, tagDraft, LIMITS.tagMaxLength, LIMITS.tagsMaxCount)
+    setRequiredSkills(skillsToSave)
+    setTags(tagsToSave)
+    setSkillDraft('')
+    setTagDraft('')
+
     const payload = {
       title: title.trim(),
       description: description.trim(),
-      required_skills: requiredSkills,
-      tags,
+      required_skills: skillsToSave,
+      tags: tagsToSave,
     }
 
     try {
@@ -263,8 +276,14 @@ function EmployerJobFormPage() {
           />
         </div>
 
-        <SkillsField skills={requiredSkills} onChange={setRequiredSkills} inputId="job_skills" />
-        <TagsField tags={tags} onChange={setTags} inputId="job_tags" />
+        <SkillsField
+          skills={requiredSkills}
+          onChange={setRequiredSkills}
+          draft={skillDraft}
+          onDraftChange={setSkillDraft}
+          inputId="job_skills"
+        />
+        <TagsField tags={tags} onChange={setTags} draft={tagDraft} onDraftChange={setTagDraft} inputId="job_tags" />
 
         {error && <p className="text-sm text-red-600">{error}</p>}
 

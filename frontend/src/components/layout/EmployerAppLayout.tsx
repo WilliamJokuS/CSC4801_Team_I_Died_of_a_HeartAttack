@@ -1,4 +1,4 @@
-import { NavLink, Outlet, useNavigate } from 'react-router-dom'
+import { Link, NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom'
 import BrandLogo from '../ui/BrandLogo'
 import { useAuth } from '../../hooks/useAuth'
 import { initialsFromDisplayName } from '../../lib/companyLogoStyle'
@@ -7,17 +7,24 @@ import { appTabClass } from './appTabClass'
 function EmployerAppLayout() {
   const { user, logout } = useAuth()
   const navigate = useNavigate()
+  const { pathname } = useLocation()
 
   async function handleLogout() {
     await logout()
     navigate('/login', { replace: true })
   }
 
+  // Exactly one tab is active. "Job postings" covers /employer and the job pages under
+  // /employer/jobs/..., but not /employer/availability or /employer/profile.
   const tabs = [
-    { to: '/employer', label: 'Job postings' },
-    { to: '/employer/availability', label: 'Interview slots' },
-    { to: '/employer/profile', label: 'Company profile' },
-  ] as const
+    {
+      to: '/employer',
+      label: 'Job postings',
+      isActive: pathname === '/employer' || pathname === '/employer/' || pathname.startsWith('/employer/jobs'),
+    },
+    { to: '/employer/availability', label: 'Interview slots', isActive: pathname.startsWith('/employer/availability') },
+    { to: '/employer/profile', label: 'Company profile', isActive: pathname.startsWith('/employer/profile') },
+  ]
 
   return (
     <div className="min-h-screen bg-canvas text-ink">
@@ -29,15 +36,10 @@ function EmployerAppLayout() {
           </NavLink>
 
           <nav className="flex items-center justify-center gap-1.5 overflow-x-auto">
-            {tabs.map(({ to, label }) => (
-              <NavLink
-                key={to}
-                to={to}
-                end={to !== '/employer'}
-                className={({ isActive }) => appTabClass(isActive)}
-              >
+            {tabs.map(({ to, label, isActive }) => (
+              <Link key={to} to={to} aria-current={isActive ? 'page' : undefined} className={appTabClass(isActive)}>
                 {label}
-              </NavLink>
+              </Link>
             ))}
           </nav>
 

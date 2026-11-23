@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { Link } from 'react-router-dom'
+import { Link, useSearchParams } from 'react-router-dom'
 import { applicationsApi, jobsApi, profileApi } from '../api/endpoints'
 import JobDetailPanel from '../components/jobs/JobDetailPanel'
 import CompanyLogo from '../components/ui/CompanyLogo'
@@ -37,7 +37,9 @@ function CandidateJobsView({ savedOnly = false }: { savedOnly?: boolean }) {
   const [loadError, setLoadError] = useState<string | null>(null)
   const [infoMessage, setInfoMessage] = useState<string | null>(null)
 
-  const [selectedId, setSelectedId] = useState<string | null>(null)
+  // `?job=<id>` (e.g. from "View" on the dashboard) preselects that job.
+  const [searchParams] = useSearchParams()
+  const [selectedId, setSelectedId] = useState<string | null>(() => searchParams.get('job'))
   const [isApplying, setIsApplying] = useState(false)
   const [applyError, setApplyError] = useState<string | null>(null)
 
@@ -123,6 +125,10 @@ function CandidateJobsView({ savedOnly = false }: { savedOnly?: boolean }) {
   }, [displayJobs, selectedId])
 
   useEffect(() => {
+    // Wait for the list: clearing the selection while loading would discard `?job=`.
+    if (isLoading) {
+      return
+    }
     if (displayJobs.length === 0) {
       setSelectedId(null)
       return
@@ -130,7 +136,7 @@ function CandidateJobsView({ savedOnly = false }: { savedOnly?: boolean }) {
     if (!selectedId || !displayJobs.some((j) => j.id === selectedId)) {
       setSelectedId(displayJobs[0].id)
     }
-  }, [displayJobs, selectedId])
+  }, [displayJobs, isLoading, selectedId])
 
   async function handleApply(job: ScoredJob) {
     setApplyError(null)

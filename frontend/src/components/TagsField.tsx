@@ -7,6 +7,9 @@ interface TagsFieldProps {
   label?: string
   inputId?: string
   maxTags?: number
+  /** Optional controlled draft text, so the parent form can commit it on submit. */
+  draft?: string
+  onDraftChange?: (draft: string) => void
 }
 
 function TagsField({
@@ -15,8 +18,12 @@ function TagsField({
   label = 'Tags',
   inputId = 'tag_input',
   maxTags = LIMITS.tagsMaxCount,
+  draft,
+  onDraftChange,
 }: TagsFieldProps) {
-  const [tagInput, setTagInput] = useState('')
+  const [localInput, setLocalInput] = useState('')
+  const tagInput = draft ?? localInput
+  const setTagInput = (value: string) => (onDraftChange ? onDraftChange(value) : setLocalInput(value))
 
   function addTag(raw: string) {
     const trimmed = raw.trim().slice(0, LIMITS.tagMaxLength)

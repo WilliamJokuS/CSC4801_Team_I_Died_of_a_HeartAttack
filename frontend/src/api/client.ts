@@ -3,6 +3,8 @@ import type { ApiErrorBody } from '../types';
 // Relative by default: Vite proxies /api in dev, and the Dockerfile serves both from one origin.
 const BASE_URL = import.meta.env.VITE_API_BASE_URL ?? '/api';
 const TOKEN_KEY = 'csc4801.token';
+/** localStorage key of the session token; AuthProvider watches it for changes made by other tabs. */
+export const TOKEN_STORAGE_KEY = TOKEN_KEY;
 
 /** Any non-2xx response, carrying the contract's { error: { code, message } } envelope. */
 export class ApiError extends Error {
@@ -31,6 +33,24 @@ export function setToken(token: string | null): void {
   } catch {
     // Storage unavailable (private mode): the session just won't survive a reload.
   }
+  // This tab changed its own session (login / logout / 401), so it stays bound to the new value.
+  if (sessionToken !== undefined) sessionToken = token;
+}
+
+// The token this tab's AuthProvider is signed in with. localStorage is shared by every tab, so
+// if another tab logs in as someone else, getToken() silently returns *their* token. Requests
+// are refused while the two differ, so a stale page (e.g. Alice's profile form) can never be
+// submitted under Bob's token. `undefined` = no AuthProvider mounted, no check.
+let sessionToken: string | null | undefined = undefined;
+
+/** Called by AuthProvider with the token it has verified (or null when signed out). */
+export function bindSessionToken(token: string | null | undefined): void {
+  sessionToken = token;
+}
+
+/** True when another tab replaced or removed the token this tab is signed in with. */
+export function sessionChangedElsewhere(): boolean {
+  return typeof sessionToken === 'string' && getToken() !== sessionToken;
 }
 
 // Lets the app drop back to the login screen when any call comes back 401.
@@ -42,6 +62,11 @@ export function setUnauthorizedHandler(handler: (() => void) | null): void {
 type Method = 'GET' | 'POST' | 'PUT' | 'DELETE';
 
 export async function request<T>(method: Method, path: string, body?: unknown): Promise<T> {
+  // /auth/* calls are exempt: they are what establish or end a session.
+  if (!path.startsWith('/auth/') && sessionChangedElsewhere()) {
+    throw new ApiError(401, 'SESSION_CHANGED', 'You signed in or out in another tab. Please reload this page.');
+  }
+
   const headers: Record<string, string> = {};
   const token = getToken();
   if (token) headers.Authorization = `Bearer ${token}`;
