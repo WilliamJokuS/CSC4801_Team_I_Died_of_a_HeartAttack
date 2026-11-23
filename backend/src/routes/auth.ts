@@ -4,7 +4,7 @@ import { requireAuth } from '../middleware/auth.js';
 
 export function authRouter(deps: AuthDeps): Router {
   const router = Router();
-  const authenticated = requireAuth(deps.jwtSecret);
+  const authenticated = requireAuth(deps.jwtSecret, deps.prisma);
 
   router.post('/auth/register', async (req, res) => {
     res.status(201).json(await register(deps, req.body));

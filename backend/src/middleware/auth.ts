@@ -13,8 +13,8 @@ declare global {
   }
 }
 
-/** Verifies the bearer token and, when given Prisma, checks that its account and role still exist. */
-export function requireAuth(jwtSecret: string, prisma?: PrismaClient): RequestHandler {
+/** Verifies the bearer token against the current account and role. */
+export function requireAuth(jwtSecret: string, prisma: PrismaClient): RequestHandler {
   return async (req, _res, next) => {
     const header = req.headers.authorization;
     const match = header?.match(/^Bearer\s+(\S+)$/i);
@@ -23,13 +23,11 @@ export function requireAuth(jwtSecret: string, prisma?: PrismaClient): RequestHa
       next(unauthorized());
       return;
     }
-    if (prisma) {
-      const user = await prisma.user.findUnique({
-        where: { id: claims.sub },
-        select: { role: true },
-      });
-      if (!user || user.role !== claims.role) throw unauthorized();
-    }
+    const user = await prisma.user.findUnique({
+      where: { id: claims.sub },
+      select: { role: true },
+    });
+    if (!user || user.role !== claims.role) throw unauthorized();
     req.auth = claims;
     next();
   };
