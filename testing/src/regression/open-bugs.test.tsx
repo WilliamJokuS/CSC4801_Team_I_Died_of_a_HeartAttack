@@ -10,16 +10,19 @@
  * reported to the respective folder owners; each test will turn green once its owner lands the fix.
  */
 import React from 'react';
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, render, waitFor } from '@testing-library/react';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { setToken } from '../../../frontend/src/api/client';
 import { AuthContext } from '../../../frontend/src/context/auth-context';
 import { AuthProvider } from '../../../frontend/src/context/AuthContext';
 import { ToastProvider } from '../../../frontend/src/context/ToastContext';
+import ApplicationStatusBadge from '../../../frontend/src/components/ApplicationStatusBadge';
 import EmployerAppLayout from '../../../frontend/src/components/layout/EmployerAppLayout';
 import CandidateAppLayout from '../../../frontend/src/components/layout/CandidateAppLayout';
 import CandidateBookInterviewPage from '../../../frontend/src/pages/CandidateBookInterviewPage';
+import CandidateJobsView from '../../../frontend/src/pages/CandidateJobsView';
+import CandidateOverviewPage from '../../../frontend/src/pages/CandidateOverviewPage';
 import EmployerApplicantsPage from '../../../frontend/src/pages/EmployerApplicantsPage';
 import EmployerAvailabilityPage from '../../../frontend/src/pages/EmployerAvailabilityPage';
 import EmployerJobFormPage from '../../../frontend/src/pages/EmployerJobFormPage';
@@ -717,6 +720,224 @@ describe('Open Bug Regressions — Frontend (Owner: Ean Jie)', () => {
     });
     expect(container.textContent).toMatch(/Demo credentials filled/i);
   });
+
+  it('BUG-FE-15 (SEC-02 / FP-AUTH-1, FP-CAN-1, endpoints.ts:40-46 / AuthContext.tsx:44-47): Logout clears authenticated UI and private resume even if POST /api/auth/logout fails (multi-tab 401 or backend 5xx)', async () => {
+    setToken('cand-jwt');
+    const origFetch = globalThis.fetch;
+    globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input);
+      if (url.endsWith('/api/me')) {
+        return new Response(JSON.stringify(candUser), {
+          status: 200,
+          headers: { 'content-type': 'application/json' },
+        });
+      }
+      if (url.endsWith('/api/candidates/me/profile')) {
+        return new Response(
+          JSON.stringify({
+            user_id: 'cand-1',
+            display_name: 'Alice Tan',
+            skills: ['python'],
+            resume_text: 'CONFIDENTIAL RESUME CONTENT',
+          }),
+          { status: 200, headers: { 'content-type': 'application/json' } },
+        );
+      }
+      if (url.endsWith('/api/auth/logout') && init?.method === 'POST') {
+        return new Response(
+          JSON.stringify({ error: { code: 'UNAUTHORIZED', message: 'Authentication required' } }),
+          { status: 401, headers: { 'content-type': 'application/json' } },
+        );
+      }
+      throw new Error(`Unexpected fetch: ${url}`);
+    }) as typeof fetch;
+
+    try {
+      const { findByDisplayValue, getByRole, queryByDisplayValue, findByText } = render(
+        <MemoryRouter initialEntries={['/candidate/profile']}>
+          <AuthProvider>
+            <Routes>
+              <Route path="/login" element={<div>Login page</div>} />
+              <Route path="/candidate" element={<CandidateAppLayout />}>
+                <Route path="profile" element={<CandidateProfilePage />} />
+              </Route>
+            </Routes>
+          </AuthProvider>
+        </MemoryRouter>,
+      );
+
+      await findByDisplayValue('CONFIDENTIAL RESUME CONTENT');
+
+      // Simulate another tab logging out first so localStorage token is already gone
+      setToken(null);
+
+      fireEvent.click(getByRole('button', { name: /Log out/i }));
+
+      expect(await findByText('Login page')).toBeTruthy();
+      expect(queryByDisplayValue('CONFIDENTIAL RESUME CONTENT')).toBeNull();
+      expect(localStorage.getItem('csc4801.token')).toBeNull();
+    } finally {
+      globalThis.fetch = origFetch;
+    }
+  });
+
+  it('BUG-FE-16 (FUNC-01 / FP-CAN-3, FP-EMP-3, ApplicationStatusBadge.tsx:10-15 / CandidateBookInterviewPage.tsx:152): Status badge displays canonical "Interviewing" (not "Invited") and booked interview page never shows "Invited"', async () => {
+    const unbooked = render(<ApplicationStatusBadge status="Interviewing" interviewBooked={false} />);
+    expect(unbooked.container.textContent).toMatch(/Interviewing/i);
+    expect(unbooked.container.textContent).not.toMatch(/Invited/i);
+    cleanup();
+
+    const origFetch = globalThis.fetch;
+    globalThis.fetch = (async (input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url.endsWith('/api/applications/mine')) {
+        return new Response(
+          JSON.stringify([
+            {
+              id: 'app-booked',
+              job_id: 'job-1',
+              candidate_id: 'cand-1',
+              status: 'Interviewing',
+              created_at: '2026-01-02T00:00:00Z',
+              interview_slot_id: 'slot-booked',
+              match_score: 100,
+              job: { id: 'job-1', title: 'Backend Engineer', company_name: 'Acme' },
+              candidate: { id: 'cand-1', display_name: 'Alice Tan', skills: ['python'] },
+              interview_slot: {
+                id: 'slot-booked',
+                employer_id: 'emp-1',
+                start_time: '2027-06-01T10:00:00Z',
+                end_time: '2027-06-01T10:30:00Z',
+                is_booked: true,
+              },
+            },
+          ]),
+          { status: 200, headers: { 'content-type': 'application/json' } },
+        );
+      }
+      throw new Error(`Unexpected fetch: ${url}`);
+    }) as typeof fetch;
+
+    try {
+      const { container, findByText } = render(
+        <AuthContext.Provider value={staticAuth(candUser)}>
+          <MemoryRouter initialEntries={['/candidate/applications/app-booked/book']}>
+            <Routes>
+              <Route path="/candidate/applications/:applicationId/book" element={<CandidateBookInterviewPage />} />
+            </Routes>
+          </MemoryRouter>
+        </AuthContext.Provider>,
+      );
+
+      await findByText(/You already have an interview booked/i);
+      expect(container.textContent).not.toMatch(/\bInvited\b/);
+    } finally {
+      globalThis.fetch = origFetch;
+    }
+  });
+
+  it('BUG-FE-17 (FUNC-02 / FP-CAN-2, CandidateOverviewPage.tsx:74,182 / CandidateJobsView.tsx:40,125-133): Candidate dashboard lists all active jobs with required skills and "View" opens the clicked job', async () => {
+    const jobs = [
+      {
+        id: 'job-1',
+        employer_id: 'emp-1',
+        company_name: 'Acme',
+        company_description: '',
+        title: 'Job One',
+        description: 'First job full description',
+        required_skills: ['python'],
+        tags: ['Remote'],
+        created_at: '2026-01-04T00:00:00Z',
+        match_score: 100,
+        has_applied: false,
+      },
+      {
+        id: 'job-2',
+        employer_id: 'emp-1',
+        company_name: 'Beta',
+        company_description: '',
+        title: 'Job Two',
+        description: 'Second job full description',
+        required_skills: ['sql'],
+        tags: ['Hybrid'],
+        created_at: '2026-01-03T00:00:00Z',
+        match_score: 90,
+        has_applied: false,
+      },
+      {
+        id: 'job-3',
+        employer_id: 'emp-1',
+        company_name: 'Gamma',
+        company_description: '',
+        title: 'Job Three',
+        description: 'Third job full description',
+        required_skills: ['go'],
+        tags: [],
+        created_at: '2026-01-02T00:00:00Z',
+        match_score: 80,
+        has_applied: false,
+      },
+      {
+        id: 'job-4',
+        employer_id: 'emp-1',
+        company_name: 'Delta',
+        company_description: '',
+        title: 'Job Four',
+        description: 'Fourth job full description',
+        required_skills: ['rust'],
+        tags: [],
+        created_at: '2026-01-01T00:00:00Z',
+        match_score: 50,
+        has_applied: false,
+      },
+    ];
+
+    const origFetch = globalThis.fetch;
+    globalThis.fetch = (async (input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url.endsWith('/api/jobs')) {
+        return new Response(JSON.stringify(jobs), { status: 200, headers: { 'content-type': 'application/json' } });
+      }
+      if (url.endsWith('/api/applications/mine')) {
+        return new Response(JSON.stringify([]), { status: 200, headers: { 'content-type': 'application/json' } });
+      }
+      if (url.endsWith('/api/candidates/me/profile')) {
+        return new Response(
+          JSON.stringify({ user_id: 'cand-1', display_name: 'Alice Tan', skills: ['python'], resume_text: '' }),
+          { status: 200, headers: { 'content-type': 'application/json' } },
+        );
+      }
+      throw new Error(`Unexpected fetch: ${url}`);
+    }) as typeof fetch;
+
+    try {
+      const { container, findByText, getAllByRole } = render(
+        <ToastProvider>
+          <AuthContext.Provider value={staticAuth(candUser)}>
+            <MemoryRouter initialEntries={['/candidate']}>
+              <Routes>
+                <Route path="/candidate" element={<CandidateOverviewPage />} />
+                <Route path="/candidate/jobs" element={<CandidateJobsView />} />
+              </Routes>
+            </MemoryRouter>
+          </AuthContext.Provider>
+        </ToastProvider>,
+      );
+
+      await findByText('Job One');
+      // All active jobs (not sliced to 3) and their required skills must be shown
+      expect(container.textContent).toContain('Job Four');
+      expect(container.textContent).toContain('sql');
+
+      // Clicking View on the 2nd job must open Job Two's details, not Job One's
+      const viewLinks = getAllByRole('link', { name: /^View$/i });
+      fireEvent.click(viewLinks[1]);
+
+      expect(await findByText('Second job full description')).toBeTruthy();
+    } finally {
+      globalThis.fetch = origFetch;
+    }
+  });
 });
 
 describe('Open Bug Regressions — Backend (Owner: William)', () => {
@@ -761,5 +982,79 @@ describe('Open Bug Regressions — Backend (Owner: William)', () => {
     expect(skillsSchema.safeParse([padded50Skill]).success).toBe(true);
     expect(skillsSchema.safeParse(dup51Skills).success).toBe(true);
     expect(tagsSchema.safeParse(['  ' + 'a'.repeat(30) + '  ']).success).toBe(true);
+  });
+
+  it('BUG-BE-4 (SEC-01 / FP-AUTH-1, FP-AUTH-2, auth/service.ts:45-48,108-120): POST /api/auth/login rejects bcryptjs NUL-byte repeated passwords and >72-byte suffix passwords', async () => {
+    const db = new FakePrisma();
+    const api = startServer(db);
+
+    const shortReg = await api.request('POST', '/auth/register', {
+      body: {
+        email: 'nul-test@demo.test',
+        password: 'password123',
+        display_name: 'Nul Test',
+        role: 'Candidate',
+      },
+    });
+    expect(shortReg.status).toBe(201);
+
+    const nulBypass = await api.request('POST', '/auth/login', {
+      body: {
+        email: 'nul-test@demo.test',
+        password: 'password123\u0000password123',
+      },
+    });
+    expect([400, 401]).toContain(nulBypass.status);
+    expect(nulBypass.body).not.toHaveProperty('token');
+
+    const exact72 = 'a'.repeat(72);
+    const longReg = await api.request('POST', '/auth/register', {
+      body: {
+        email: 'long-test@demo.test',
+        password: exact72,
+        display_name: 'Long Test',
+        role: 'Candidate',
+      },
+    });
+    expect(longReg.status).toBe(201);
+
+    const suffixBypass = await api.request('POST', '/auth/login', {
+      body: {
+        email: 'long-test@demo.test',
+        password: exact72 + 'WRONG_SUFFIX',
+      },
+    });
+    expect([400, 401]).toContain(suffixBypass.status);
+    expect(suffixBypass.body).not.toHaveProperty('token');
+  });
+
+  it('BUG-BE-5 (SEC-03 / FP-AUTH-3, routes/auth.ts:7): authRouter passes deps.prisma to requireAuth so deleted-user and stale-role JWTs receive 401 on /api/auth/logout and /api/me', async () => {
+    const db = new FakePrisma();
+    const api = startServer(db);
+
+    const ghostToken = tokenFor('00000000-0000-4000-8000-999999999999', 'Candidate');
+    const ghostLogout = await api.request('POST', '/auth/logout', { token: ghostToken });
+    expect(ghostLogout.status).toBe(401);
+
+    const candId = db.addUser({ role: 'Candidate', email: 'stale-role@demo.test' });
+    const staleRoleToken = tokenFor(candId, 'Employer');
+    const staleMe = await api.request('GET', '/me', { token: staleRoleToken });
+    const staleLogout = await api.request('POST', '/auth/logout', { token: staleRoleToken });
+    expect(staleMe.status).toBe(401);
+    expect(staleLogout.status).toBe(401);
+  });
+
+  it('BUG-BE-6 (ENV-01 / FP-ARCH-1, FP-SUB-1, backend/prisma.config.ts:11): prisma.config.ts loads cleanly when DATABASE_URL is unset so postinstall (prisma generate) succeeds on clean checkout', async () => {
+    const saved = process.env.DATABASE_URL;
+    delete process.env.DATABASE_URL;
+    vi.resetModules();
+    try {
+      const mod = await import('../../../backend/prisma.config');
+      expect(mod.default).toBeDefined();
+    } finally {
+      if (saved !== undefined) {
+        process.env.DATABASE_URL = saved;
+      }
+    }
   });
 });
