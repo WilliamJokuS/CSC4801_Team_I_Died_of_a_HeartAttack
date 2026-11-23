@@ -5,14 +5,14 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "test": "vitest run --configLoader native src/unit src/frontend",
-    "test:bugs": "vitest run --configLoader native src/regression",
-    "test:live": "vitest run --configLoader native src/live-pg",
-    "test:watch": "vitest --configLoader native src/unit src/frontend"
+    "test": "vitest run --configLoader runner src/unit src/frontend",
+    "test:bugs": "vitest run --configLoader runner src/regression",
+    "test:live": "vitest run --configLoader runner src/live-pg",
+    "test:watch": "vitest --configLoader runner src/unit src/frontend"
   },
   "license": "MIT",
   "engines": {
-    "node": ">=22"
+    "node": ">=22.12.0"
   },
   "devDependencies": {
     "@prisma/adapter-pg": "^7.10.1",
