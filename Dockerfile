@@ -17,6 +17,8 @@ RUN DATABASE_URL=postgres://app:app@localhost:5432/recruiting npm --prefix backe
 RUN npm --prefix frontend ci && npm --prefix frontend run build
 RUN npm --prefix testing ci
 
+COPY Dockerfile .dockerignore ./
+
 ENV PORT=8080
 EXPOSE 8080
 
