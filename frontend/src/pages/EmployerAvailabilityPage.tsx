@@ -4,7 +4,7 @@ import ConfirmDialog from '../components/ui/ConfirmDialog'
 import LoadingScreen from '../components/LoadingScreen'
 import { useAuth } from '../hooks/useAuth'
 import { useToast } from '../hooks/useToast'
-import { apiErrorMessage } from '../lib/apiErrorMessage'
+import { apiErrorMessage, isStaleStateError } from '../lib/apiErrorMessage'
 import {
   createPreviewAvailabilitySlot,
   deletePreviewAvailabilitySlot,
@@ -59,10 +59,13 @@ function EmployerAvailabilityPage() {
   const [actionError, setActionError] = useState<string | null>(null)
   const [infoMessage, setInfoMessage] = useState<string | null>(null)
 
-  const loadSlots = useCallback(async () => {
-    setIsLoading(true)
+  // `silent` refreshes in place (no full-page spinner) after a conflict, so the error stays visible.
+  const loadSlots = useCallback(async ({ silent = false }: { silent?: boolean } = {}) => {
+    if (!silent) {
+      setIsLoading(true)
+      setInfoMessage(null)
+    }
     setLoadError(null)
-    setInfoMessage(null)
 
     if (previewMode) {
       setSlots(loadPreviewEmployerAvailability())
@@ -171,6 +174,11 @@ function EmployerAvailabilityPage() {
       pushToast('Slot deleted', 'error')
     } catch (err) {
       setActionError(apiErrorMessage(err, 'Could not delete slot. Please try again.'))
+      // e.g. 409 SLOT_BOOKED: a candidate booked it after we loaded the list. Reload so the
+      // slot shows as booked (Delete disabled) instead of still saying "Available".
+      if (isStaleStateError(err)) {
+        void loadSlots({ silent: true })
+      }
     } finally {
       setDeletingId(null)
     }

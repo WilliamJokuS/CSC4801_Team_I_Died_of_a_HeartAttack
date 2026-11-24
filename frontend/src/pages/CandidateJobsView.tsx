@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
+import { ApiError } from '../api/client'
 import { applicationsApi, jobsApi, profileApi } from '../api/endpoints'
 import JobDetailPanel from '../components/jobs/JobDetailPanel'
 import CompanyLogo from '../components/ui/CompanyLogo'
@@ -8,7 +9,7 @@ import { IconSearch } from '../components/icons/NavIcons'
 import { useAuth } from '../hooks/useAuth'
 import { useSavedJobs } from '../hooks/useSavedJobs'
 import { useToast } from '../hooks/useToast'
-import { apiErrorMessage } from '../lib/apiErrorMessage'
+import { apiErrorMessage, isStaleStateError } from '../lib/apiErrorMessage'
 import { formatDateTime } from '../lib/formatDateTime'
 import { normalizeScoredJob } from '../lib/normalizeApi'
 import { isPreviewUser, loadPreviewJobs, loadPreviewSkills, savePreviewApplication } from '../lib/preview'
@@ -43,10 +44,13 @@ function CandidateJobsView({ savedOnly = false }: { savedOnly?: boolean }) {
   const [isApplying, setIsApplying] = useState(false)
   const [applyError, setApplyError] = useState<string | null>(null)
 
-  const loadJobList = useCallback(async () => {
-    setIsLoading(true)
+  // `silent` refreshes in place after a conflict, without the full-page spinner.
+  const loadJobList = useCallback(async ({ silent = false }: { silent?: boolean } = {}) => {
+    if (!silent) {
+      setIsLoading(true)
+      setInfoMessage(null)
+    }
     setLoadError(null)
-    setInfoMessage(null)
 
     if (previewMode) {
       setJobs(loadPreviewJobs())
@@ -157,6 +161,16 @@ function CandidateJobsView({ savedOnly = false }: { savedOnly?: boolean }) {
       const message = apiErrorMessage(err, 'Could not apply. Please try again.')
       setApplyError(message)
       pushToast(message, 'error')
+      if (err instanceof ApiError && err.code === 'ALREADY_APPLIED') {
+        // Show the applied state right away; the reload below confirms it from the server.
+        setJobs((current) =>
+          current.map((item) => (item.id === job.id ? { ...item, has_applied: true } : item)),
+        )
+      }
+      // 409 / 404 (e.g. the job was deleted): reload so the list matches the server.
+      if (isStaleStateError(err)) {
+        void loadJobList({ silent: true })
+      }
     } finally {
       setIsApplying(false)
     }
