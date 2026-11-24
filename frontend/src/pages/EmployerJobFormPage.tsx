@@ -285,7 +285,7 @@ function EmployerJobFormPage() {
         />
         <TagsField tags={tags} onChange={setTags} draft={tagDraft} onDraftChange={setTagDraft} inputId="job_tags" />
 
-        {error && <p className="text-sm text-red-600">{error}</p>}
+        {error && <p role="alert" className="text-sm text-red-600">{error}</p>}
 
         <div className="flex gap-2">
           <button type="submit" disabled={isSaving || !isDirty} className="btn-primary disabled:opacity-50">

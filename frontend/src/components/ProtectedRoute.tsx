@@ -1,11 +1,11 @@
-import type { ReactNode } from 'react'
+import { Fragment, type ReactNode } from 'react'
 import { Navigate, useLocation } from 'react-router-dom'
 import { useAuth } from '../hooks/useAuth'
 import type { Role } from '../types'
 import LoadingScreen from './LoadingScreen'
 
 function ProtectedRoute({ role, children }: { role: Role; children: ReactNode }) {
-  const { user, isLoading } = useAuth()
+  const { user, isLoading, sessionVersion } = useAuth()
   const location = useLocation()
 
   if (isLoading) {
@@ -20,7 +20,7 @@ function ProtectedRoute({ role, children }: { role: Role; children: ReactNode })
     return <Navigate to="/" replace />
   }
 
-  return <>{children}</>
+  return <Fragment key={sessionVersion}>{children}</Fragment>
 }
 
 export default ProtectedRoute

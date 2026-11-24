@@ -40,7 +40,12 @@ function CandidateJobsView({ savedOnly = false }: { savedOnly?: boolean }) {
 
   // `?job=<id>` (e.g. from "View" on the dashboard) preselects that job.
   const [searchParams] = useSearchParams()
-  const [selectedId, setSelectedId] = useState<string | null>(() => searchParams.get('job'))
+  const requestedJobId = searchParams.get('job')
+  const [selectedId, setSelectedId] = useState(requestedJobId)
+
+  useEffect(() => {
+    setSelectedId(requestedJobId)
+  }, [requestedJobId])
   const [isApplying, setIsApplying] = useState(false)
   const [applyError, setApplyError] = useState<string | null>(null)
 

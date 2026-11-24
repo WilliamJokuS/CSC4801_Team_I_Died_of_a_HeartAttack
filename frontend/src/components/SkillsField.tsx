@@ -7,6 +7,7 @@ interface SkillsFieldProps {
   inputId?: string
   label?: string
   hint?: string
+  disabled?: boolean
   /** Optional controlled draft text, so the parent form can commit it on submit. */
   draft?: string
   onDraftChange?: (draft: string) => void
@@ -18,6 +19,7 @@ function SkillsField({
   inputId = 'skill_input',
   label = 'Required skills',
   hint = 'Press Enter or comma to add each skill (max 50).',
+  disabled = false,
   draft,
   onDraftChange,
 }: SkillsFieldProps) {
@@ -69,14 +71,14 @@ function SkillsField({
           maxLength={LIMITS.skillMaxLength}
           onChange={(e) => setSkillInput(e.target.value)}
           onKeyDown={handleSkillKeyDown}
-          disabled={skills.length >= LIMITS.skillsMaxCount}
+          disabled={disabled || skills.length >= LIMITS.skillsMaxCount}
           placeholder="e.g. Python"
           className="flex-1 rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-gray-500 focus:outline-none disabled:opacity-50"
         />
         <button
           type="button"
           onClick={() => addSkill(skillInput)}
-          disabled={skills.length >= LIMITS.skillsMaxCount}
+          disabled={disabled || skills.length >= LIMITS.skillsMaxCount}
           className="rounded-md border border-gray-300 px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50"
         >
           Add
@@ -95,6 +97,7 @@ function SkillsField({
                 <button
                   type="button"
                   onClick={() => removeSkill(skill)}
+                  disabled={disabled}
                   aria-label={`Remove ${skill}`}
                   className="text-gray-500 hover:text-gray-900"
                 >

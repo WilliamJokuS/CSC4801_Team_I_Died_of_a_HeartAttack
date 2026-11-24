@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Link, Navigate, useParams } from 'react-router-dom'
 import { applicationsApi, jobsApi } from '../api/endpoints'
 import ApplicationStatusBadge from '../components/ApplicationStatusBadge'
@@ -40,7 +40,8 @@ function EmployerApplicantsPage() {
   const [loadError, setLoadError] = useState<string | null>(null)
   const [infoMessage, setInfoMessage] = useState<string | null>(null)
   const [statusError, setStatusError] = useState<string | null>(null)
-  const [updatingId, setUpdatingId] = useState<string | null>(null)
+  const pendingUpdates = useRef(new Set<string>())
+  const [updatingIds, setUpdatingIds] = useState<ReadonlySet<string>>(new Set())
   const [pendingStatusChange, setPendingStatusChange] = useState<{
     applicationId: string
     status: ApplicationStatus
@@ -105,10 +106,13 @@ function EmployerApplicantsPage() {
   }, [applicants])
 
   async function applyStatusChange(applicationId: string, status: ApplicationStatus) {
+    if (pendingUpdates.current.has(applicationId)) return
+    pendingUpdates.current.add(applicationId)
+    setUpdatingIds(new Set(pendingUpdates.current))
     setStatusError(null)
-    setUpdatingId(applicationId)
 
     try {
+      let savedStatus = status
       if (previewMode) {
         const updated = updatePreviewApplicantStatus(applicationId, status)
         if (updated) {
@@ -117,28 +121,30 @@ function EmployerApplicantsPage() {
           )
         }
       } else {
-        await applicationsApi.setStatus(applicationId, status)
+        const updated = await applicationsApi.setStatus(applicationId, status)
+        savedStatus = updated.status
         setApplicants((currentList) =>
-          currentList.map((item) => (item.id === applicationId ? { ...item, status } : item)),
+          currentList.map((item) => (item.id === applicationId ? { ...item, status: savedStatus } : item)),
         )
       }
-      if (status === 'Accepted') {
+      if (savedStatus === 'Accepted') {
         pushToast('Applicant accepted', 'success')
-      } else if (status === 'Rejected') {
+      } else if (savedStatus === 'Rejected') {
         pushToast('Applicant rejected', 'error')
       } else {
-        pushToast(`Status updated to ${status}`, 'info')
+        pushToast(`Status updated to ${savedStatus}`, 'info')
       }
     } catch (err) {
       setStatusError(apiErrorMessage(err, 'Could not update status. Please try again.'))
     } finally {
-      setUpdatingId(null)
+      pendingUpdates.current.delete(applicationId)
+      setUpdatingIds(new Set(pendingUpdates.current))
     }
   }
 
   function handleStatusSelect(applicationId: string, status: ApplicationStatus) {
     const current = applicants.find((item) => item.id === applicationId)
-    if (!current || current.status === status) {
+    if (!current || current.status === status || pendingUpdates.current.has(applicationId)) {
       return
     }
     if (needsStatusChangeConfirm(current.status, status)) {
@@ -256,7 +262,6 @@ function EmployerApplicantsPage() {
                   </p>
                 )}
 
-                {/* FP-EMP-3: show all of the candidate's skills; ones the job requires are highlighted. */}
                 {candidateSkills.length > 0 ? (
                   <ul className="mt-3 flex flex-wrap gap-2" aria-label="Candidate skills">
                     {candidateSkills.map((skill) => (
@@ -294,7 +299,7 @@ function EmployerApplicantsPage() {
                   <select
                     id={`status-${applicant.id}`}
                     value={applicant.status}
-                    disabled={updatingId === applicant.id}
+                    disabled={updatingIds.has(applicant.id)}
                     onChange={(e) => handleStatusSelect(applicant.id, e.target.value as ApplicationStatus)}
                     className="mt-1 rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-gray-500 focus:outline-none disabled:opacity-50"
                   >

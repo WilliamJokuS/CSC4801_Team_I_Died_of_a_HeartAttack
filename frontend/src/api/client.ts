@@ -2,9 +2,7 @@ import type { ApiErrorBody } from '../types';
 
 // Relative by default: Vite proxies /api in dev, and the Dockerfile serves both from one origin.
 const BASE_URL = import.meta.env.VITE_API_BASE_URL ?? '/api';
-const TOKEN_KEY = 'csc4801.token';
-/** localStorage key of the session token; AuthProvider watches it for changes made by other tabs. */
-export const TOKEN_STORAGE_KEY = TOKEN_KEY;
+export const TOKEN_KEY = 'csc4801.token';
 
 /** Any non-2xx response, carrying the contract's { error: { code, message } } envelope. */
 export class ApiError extends Error {
@@ -18,39 +16,80 @@ export class ApiError extends Error {
   }
 }
 
-export function getToken(): string | null {
+let activeToken: string | null | undefined;
+let storedToken: string | null | undefined;
+let sessionVersion = 0;
+
+export function refreshStoredToken(): boolean {
+  let token: string | null;
   try {
-    return localStorage.getItem(TOKEN_KEY);
+    token = localStorage.getItem(TOKEN_KEY);
   } catch {
-    return null;
+    return false;
   }
+
+  if (token === storedToken) return false;
+  storedToken = token;
+  if (activeToken === token) return false;
+  activeToken = token;
+  sessionVersion += 1;
+  return true;
+}
+
+export function getToken(): string | null {
+  if (activeToken === undefined) {
+    activeToken = null;
+    refreshStoredToken();
+  }
+  return activeToken;
+}
+
+export function getSessionVersion(): number {
+  return sessionVersion;
 }
 
 export function setToken(token: string | null): void {
+  if (getToken() !== token) sessionVersion += 1;
+  activeToken = token;
   try {
-    if (token) localStorage.setItem(TOKEN_KEY, token);
-    else localStorage.removeItem(TOKEN_KEY);
+    if (token) {
+      localStorage.setItem(TOKEN_KEY, token);
+    } else {
+      // A storage event for a newer sign-in may still be queued.
+      if (storedToken !== undefined && localStorage.getItem(TOKEN_KEY) !== storedToken) return;
+      localStorage.removeItem(TOKEN_KEY);
+    }
+    storedToken = token;
   } catch {
-    // Storage unavailable (private mode): the session just won't survive a reload.
+    // The active session still works if storage is unavailable.
   }
-  // This tab changed its own session (login / logout / 401), so it stays bound to the new value.
-  if (sessionToken !== undefined) sessionToken = token;
 }
 
-// The token this tab's AuthProvider is signed in with. localStorage is shared by every tab, so
-// if another tab logs in as someone else, getToken() silently returns *their* token. Requests
-// are refused while the two differ, so a stale page (e.g. Alice's profile form) can never be
-// submitted under Bob's token. `undefined` = no AuthProvider mounted, no check.
-let sessionToken: string | null | undefined = undefined;
+// Number of mounted AuthProviders. The cross-tab session check only applies while one is
+// mounted (always, in the app): it is what listens for 'storage' events and re-validates the
+// user. A page rendered without one (e.g. in a test) has no signed-in UI to protect, so it just
+// uses whatever token is currently stored.
+let sessionWatchers = 0;
 
-/** Called by AuthProvider with the token it has verified (or null when signed out). */
-export function bindSessionToken(token: string | null | undefined): void {
-  sessionToken = token;
+/** Called by AuthProvider on mount; the returned function unregisters it. */
+export function watchSession(): () => void {
+  sessionWatchers += 1;
+  return () => {
+    sessionWatchers -= 1;
+  };
 }
 
-/** True when another tab replaced or removed the token this tab is signed in with. */
-export function sessionChangedElsewhere(): boolean {
-  return typeof sessionToken === 'string' && getToken() !== sessionToken;
+function assertCurrentSession(version: number): void {
+  if (sessionWatchers === 0) return;
+  let latestStoredToken = storedToken;
+  try {
+    latestStoredToken = localStorage.getItem(TOKEN_KEY);
+  } catch {
+    // Without storage, only this tab can change the session.
+  }
+  if (version !== sessionVersion || (storedToken !== undefined && latestStoredToken !== storedToken)) {
+    throw new ApiError(0, 'SESSION_CHANGED', 'The active session changed');
+  }
 }
 
 // Lets the app drop back to the login screen when any call comes back 401.
@@ -62,13 +101,11 @@ export function setUnauthorizedHandler(handler: (() => void) | null): void {
 type Method = 'GET' | 'POST' | 'PUT' | 'DELETE';
 
 export async function request<T>(method: Method, path: string, body?: unknown): Promise<T> {
-  // /auth/* calls are exempt: they are what establish or end a session.
-  if (!path.startsWith('/auth/') && sessionChangedElsewhere()) {
-    throw new ApiError(401, 'SESSION_CHANGED', 'You signed in or out in another tab. Please reload this page.');
-  }
-
   const headers: Record<string, string> = {};
+  if (sessionWatchers === 0) refreshStoredToken();
   const token = getToken();
+  const version = getSessionVersion();
+  assertCurrentSession(version);
   if (token) headers.Authorization = `Bearer ${token}`;
   if (body !== undefined) headers['Content-Type'] = 'application/json';
 
@@ -80,12 +117,14 @@ export async function request<T>(method: Method, path: string, body?: unknown): 
       body: body === undefined ? undefined : JSON.stringify(body),
     });
   } catch {
+    assertCurrentSession(version);
     throw new ApiError(0, 'NETWORK_ERROR', 'Cannot reach the server');
   }
 
+  const text = res.status === 204 ? undefined : await res.text();
+  assertCurrentSession(version);
   if (res.status === 204) return undefined as T;
 
-  const text = await res.text();
   const data: unknown = text ? safeJson(text) : undefined;
 
   if (!res.ok) {
@@ -94,7 +133,7 @@ export async function request<T>(method: Method, path: string, body?: unknown): 
     const message = envelope?.error?.message ?? res.statusText ?? 'Request failed';
     // Only end the session this request was made with: a stale request finishing after the
     // user logged in again must not discard the new token.
-    if (res.status === 401 && token && getToken() === token) {
+    if (res.status === 401 && token && path !== '/auth/login' && path !== '/auth/register') {
       setToken(null);
       onUnauthorized?.();
     }
