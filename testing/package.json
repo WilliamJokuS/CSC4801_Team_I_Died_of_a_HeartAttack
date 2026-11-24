@@ -12,7 +12,7 @@
   },
   "license": "MIT",
   "engines": {
-    "node": ">=22.12.0"
+    "node": "^22.13.0 || >=24.0.0"
   },
   "devDependencies": {
     "@prisma/adapter-pg": "^7.10.1",

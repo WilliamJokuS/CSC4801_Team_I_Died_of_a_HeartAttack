@@ -20,6 +20,7 @@ import { AuthContext } from '../../../frontend/src/context/auth-context';
 import { AuthProvider } from '../../../frontend/src/context/AuthContext';
 import { ToastProvider } from '../../../frontend/src/context/ToastContext';
 import ApplicationStatusBadge from '../../../frontend/src/components/ApplicationStatusBadge';
+import ProtectedRoute from '../../../frontend/src/components/ProtectedRoute';
 import EmployerAppLayout from '../../../frontend/src/components/layout/EmployerAppLayout';
 import CandidateAppLayout from '../../../frontend/src/components/layout/CandidateAppLayout';
 import CandidateBookInterviewPage from '../../../frontend/src/pages/CandidateBookInterviewPage';
@@ -513,11 +514,11 @@ describe('Open Bug Regressions — Frontend (Owner: Ean Jie)', () => {
     }) as typeof fetch;
 
     try {
-      const { container, findByDisplayValue } = render(
+      const { container, findByDisplayValue, findByRole } = render(
         <MemoryRouter initialEntries={['/candidate/profile']}>
           <AuthProvider>
             <Routes>
-              <Route path="/candidate" element={<CandidateAppLayout />}>
+              <Route path="/candidate" element={<ProtectedRoute role="Candidate"><CandidateAppLayout /></ProtectedRoute>}>
                 <Route path="profile" element={<CandidateProfilePage />} />
               </Route>
             </Routes>
@@ -528,8 +529,8 @@ describe('Open Bug Regressions — Frontend (Owner: Ean Jie)', () => {
       const nameInput = await findByDisplayValue('Alice Tan');
       fireEvent.change(nameInput, { target: { value: 'Bob Lim' } });
 
-      const saveButtons = Array.from(container.querySelectorAll('button[type="submit"]')) as HTMLButtonElement[];
-      fireEvent.click(saveButtons[0]);
+      const saveBtn = await findByRole('button', { name: /Save profile changes/i });
+      fireEvent.click(saveBtn);
 
       await waitFor(() => {
         const headerAvatar = container.querySelector('header a[title="Profile"]')?.textContent?.trim();
