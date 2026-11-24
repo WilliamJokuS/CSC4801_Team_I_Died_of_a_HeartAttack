@@ -5,7 +5,7 @@ import ConfirmDialog from '../components/ui/ConfirmDialog'
 import LoadingScreen from '../components/LoadingScreen'
 import { useAuth } from '../hooks/useAuth'
 import { useToast } from '../hooks/useToast'
-import { apiErrorMessage } from '../lib/apiErrorMessage'
+import { apiErrorMessage, isStaleStateError } from '../lib/apiErrorMessage'
 import { normalizeEmployerJob } from '../lib/normalizeApi'
 import { deletePreviewEmployerJob, loadPreviewEmployerJobs } from '../lib/employerPreview'
 import { isPreviewUser } from '../lib/preview'
@@ -24,11 +24,14 @@ function EmployerDashboardPage() {
   const [jobPendingDelete, setJobPendingDelete] = useState<EmployerJob | null>(null)
   const { pushToast } = useToast()
 
-  const loadJobs = useCallback(async () => {
-    setIsLoading(true)
+  // `silent` refreshes in place after a conflict: no full-page spinner, and actionError is kept.
+  const loadJobs = useCallback(async ({ silent = false }: { silent?: boolean } = {}) => {
+    if (!silent) {
+      setIsLoading(true)
+      setInfoMessage(null)
+      setActionError(null)
+    }
     setLoadError(null)
-    setInfoMessage(null)
-    setActionError(null)
 
     if (previewMode) {
       setJobs(loadPreviewEmployerJobs())
@@ -79,6 +82,11 @@ function EmployerDashboardPage() {
       pushToast(`Deleted "${job.title}"`, 'error')
     } catch (err) {
       setActionError(apiErrorMessage(err, 'Could not delete the job. Please try again.'))
+      // e.g. 409 JOB_HAS_DEPENDENTS: someone applied after we loaded. Reload so the applicant
+      // count and the disabled Delete button match the server.
+      if (isStaleStateError(err)) {
+        void loadJobs({ silent: true })
+      }
     } finally {
       setDeletingJobId(null)
     }

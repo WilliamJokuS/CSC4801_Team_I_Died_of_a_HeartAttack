@@ -5,7 +5,7 @@ import { applicationsApi, schedulingApi } from '../api/endpoints'
 import ApplicationStatusBadge from '../components/ApplicationStatusBadge'
 import LoadingScreen from '../components/LoadingScreen'
 import { useAuth } from '../hooks/useAuth'
-import { apiErrorMessage } from '../lib/apiErrorMessage'
+import { apiErrorMessage, isStaleStateError } from '../lib/apiErrorMessage'
 import { formatDateTime } from '../lib/formatDateTime'
 import { interviewSummary } from '../lib/interviewDisplay'
 import { normalizeScoredApplication } from '../lib/normalizeApi'
@@ -33,15 +33,18 @@ function CandidateBookInterviewPage() {
   const [bookError, setBookError] = useState<string | null>(null)
   const [infoMessage, setInfoMessage] = useState<string | null>(null)
 
-  const loadPage = useCallback(async () => {
+  // `silent` refreshes in place (no full-page spinner) after a conflict.
+  const loadPage = useCallback(async ({ silent = false }: { silent?: boolean } = {}) => {
     if (!applicationId) {
       return
     }
 
-    setIsLoading(true)
+    if (!silent) {
+      setIsLoading(true)
+      setInfoMessage(null)
+    }
     setLoadError(null)
-    setInfoMessage(null)
-    // bookError is deliberately not cleared here: after a 409 SLOT_TAKEN the page reloads the
+    // bookError is deliberately not cleared here: after a 409 conflict the page reloads the
     // slot list and the explanation must stay visible. handleBook clears it on the next try.
 
     if (previewMode) {
@@ -71,6 +74,8 @@ function CandidateBookInterviewPage() {
       if (match.status === 'Interviewing' && !match.interview_slot_id) {
         const available = await schedulingApi.availableSlots(applicationId)
         setSlots(available)
+      } else {
+        setSlots([])
       }
     } catch (err) {
       setLoadError(apiErrorMessage(err, 'Could not load booking details. Please try again.'))
@@ -104,11 +109,14 @@ function CandidateBookInterviewPage() {
     } catch (err) {
       if (err instanceof ApiError && err.code === 'SLOT_TAKEN') {
         setBookError('That slot was just booked by someone else. Please pick another slot.')
-        // The taken slot disappears from the reloaded list; don't leave it selected.
-        setSelectedSlotId(null)
-        void loadPage()
       } else {
         setBookError(apiErrorMessage(err, 'Could not book the slot. Please try again.'))
+      }
+      // 409 (SLOT_TAKEN, SLOT_IN_PAST, NOT_INTERVIEWING, ALREADY_BOOKED) or 404: what's on screen
+      // is stale. Reload slots and status, and drop the selection since that slot may be gone.
+      if (isStaleStateError(err)) {
+        setSelectedSlotId(null)
+        void loadPage({ silent: true })
       }
     } finally {
       setIsBooking(false)

@@ -28,3 +28,12 @@ export function apiErrorMessage(err: unknown, fallback = 'Something went wrong. 
   }
   return MESSAGES[err.code] ?? err.message ?? fallback
 }
+
+/**
+ * True when the server rejected an action because the data on screen is out of date
+ * (409 conflict or 404 gone). Callers should reload from the server so the UI stops
+ * showing the stale state, while keeping the error message visible.
+ */
+export function isStaleStateError(err: unknown): boolean {
+  return err instanceof ApiError && (err.status === 409 || err.status === 404)
+}
