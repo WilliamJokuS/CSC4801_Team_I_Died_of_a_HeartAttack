@@ -21,34 +21,14 @@ import type {
   ScoredJob,
   SlotInput,
 } from '../types';
-import { getToken, request, setToken } from './client';
+import { request } from './client';
 
 const id = (value: string) => encodeURIComponent(value);
 
 export const authApi = {
-  async register(input: RegisterInput): Promise<AuthResponse> {
-    const res = await request<AuthResponse>('POST', '/auth/register', input);
-    setToken(res.token);
-    return res;
-  },
-  async login(input: LoginInput): Promise<AuthResponse> {
-    const res = await request<AuthResponse>('POST', '/auth/login', input);
-    setToken(res.token);
-    return res;
-  },
-  /**
-   * Stateless on the server, so this never throws: the token is discarded here whether or not
-   * the call succeeds (offline, 5xx, or already logged out in another tab).
-   */
-  async logout(): Promise<void> {
-    try {
-      if (getToken()) await request<void>('POST', '/auth/logout');
-    } catch {
-      // Nothing to undo server-side; the local session is cleared below regardless.
-    } finally {
-      setToken(null);
-    }
-  },
+  register: (input: RegisterInput) => request<AuthResponse>('POST', '/auth/register', input),
+  login: (input: LoginInput) => request<AuthResponse>('POST', '/auth/login', input),
+  logout: () => request<void>('POST', '/auth/logout'),
   me: () => request<AuthUser>('GET', '/me'),
 };
 

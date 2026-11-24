@@ -57,7 +57,7 @@ interface AvailabilitySlot {
 | `GET /api/jobs/{id}/applicants` | `200 ScoredApplication[]` | `401`, `403` (not an Employer, or not the job's owner), `404` |
 | `PUT /api/applications/{id}/status` | `200 Application` | `400`, `401`, `403` (not the job's owner), `404` |
 | `GET /api/employers/me/availability` | `200 AvailabilitySlot[]`, earliest first, booked and open | `401`, `403` |
-| `POST /api/employers/me/availability` | `201 AvailabilitySlot` | `400` (no timezone, end ≤ start, not exactly 30 min, start not in the future), `401`, `403` |
+| `POST /api/employers/me/availability` | `201 AvailabilitySlot` | `400` (no timezone, end ≤ start, not exactly 30 min, start not in the future), `409 SLOT_OVERLAP` (overlaps one of the employer's existing slots; back-to-back is fine), `401`, `403` |
 | `DELETE /api/employers/me/availability/{id}` | `204` | `401`, `403` (another employer's slot), `404`, `409 SLOT_BOOKED` |
 | `GET /api/applications/{id}/available-slots` | `200 AvailabilitySlot[]` (job's employer, unbooked, future) | `401`, `403` (not the application's owner), `404` |
 | `POST /api/applications/{id}/book` | `200 Application` | `400` (bad `slot_id`), `401`, `403` (not the application's owner), `404` (missing application, or slot missing / belongs to another employer), `409` (see below) |

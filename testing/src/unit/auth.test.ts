@@ -86,6 +86,15 @@ describe('FP-AUTH-1 registration', () => {
     expect(ctx.db.users).toHaveLength(0);
   });
 
+  it('registers and authenticates an 8-byte Unicode password', async () => {
+    const password = 'éééé';
+    const registered = await ctx.api.request('POST', '/auth/register', { body: { ...valid, password } });
+    expect(registered.status).toBe(201);
+    const loggedIn = await ctx.api.request('POST', '/auth/login', { body: { email: valid.email, password } });
+    expect(loggedIn.status).toBe(200);
+    expect(loggedIn.body.user.id).toBe(registered.body.user.id);
+  });
+
   it('accepts a password of exactly 72 bytes', async () => {
     const res = await ctx.api.request('POST', '/auth/register', { body: { ...valid, password: 'p'.repeat(72) } });
     expect(res.status).toBe(201);

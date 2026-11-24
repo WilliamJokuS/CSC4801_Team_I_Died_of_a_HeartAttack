@@ -92,7 +92,7 @@ Each row links to implementation or documentation and names the relevant tests o
 
 | Requirement | Implementation | Named tests or verification |
 |---|---|---|
-| FP-ARCH-1 | [Browser router](frontend/src/App.tsx), [Express server](backend/src/server.ts), [Prisma schema](backend/prisma/schema.prisma), [installation](INSTALL.md) | [seed.test.ts](testing/src/unit/seed.test.ts) — “returns 200 { status: "ok" } when the database responds”. Clean-checkout Docker verification is pending. |
+| FP-ARCH-1 | [Browser router](frontend/src/App.tsx), [Express server](backend/src/server.ts), [Prisma schema](backend/prisma/schema.prisma), [installation](INSTALL.md) | [seed.test.ts](testing/src/unit/seed.test.ts) — “returns 200 { status: "ok" } when the database responds”. [Docker smoke test](INSTALL.md#8-docker) covers startup and API health. |
 | FP-AUTH-1 | [Auth service](backend/src/auth/service.ts), [auth routes](backend/src/routes/auth.ts), [auth context](frontend/src/context/AuthContext.tsx) | [auth.test.ts](testing/src/unit/auth.test.ts) — “registers a Candidate: 201 with a token and the AuthUser shape”, “registers an Employer and starts company_name as the display name”, “keeps emails unique: a duplicate is 409 EMAIL_TAKEN and creates no second user”, “logs in with the right credentials: 200 with a token and the user”, “logout returns 204 for a valid token”. |
 | FP-AUTH-2 | [Password hashing](backend/src/auth/password.ts), [auth service](backend/src/auth/service.ts) | [auth.test.ts](testing/src/unit/auth.test.ts) — “stores a bcrypt hash (cost 12), never the plaintext password”, “never returns the password, its hash, or any credential from register, login or /me”. |
 | FP-AUTH-3 | [Auth middleware](backend/src/middleware/auth.ts), [API routes](backend/src/routes/) | [authorization.test.ts](testing/src/unit/authorization.test.ts) — route cases for “FP-AUTH-3 wrong role is 403 on every role-restricted endpoint” and “FP-AUTH-3 missing objects are 404”. [auth.test.ts](testing/src/unit/auth.test.ts) — “logout without a token is 401”. |
@@ -112,11 +112,11 @@ Each row links to implementation or documentation and names the relevant tests o
 | FP-SEC-3 | [Job detail panel](frontend/src/components/jobs/JobDetailPanel.tsx), [candidate profile page](frontend/src/pages/CandidateProfilePage.tsx) | [xss.test.tsx](testing/src/frontend/xss.test.tsx) — “JobDetailPanel shows the payload as visible text, not as a `<script>` element”, “shows the hostile display name and job title as text and creates no executable markup”. |
 | FP-SEC-4 | [Backend config](backend/src/config.ts), [environment template](backend/.env.example), [test fixtures](testing/src/support/fakePrisma.ts) | [static-checks.test.ts](testing/src/unit/static-checks.test.ts) — “only .env.example files are tracked by git (no real .env is committed)”, “rejects a missing JWT_SECRET”. The live suite uses a disposable test database. |
 | FP-PROC-1 | [Living specification](SPEC.md), [API contract](Contract/API_Contract.md), [design records](specs/) | Compare the specification to the router, Prisma schema, and services at the graded commit. |
-| FP-DOC-1 | [Installation instructions](INSTALL.md) | Verified startup, migrations, demo seed, and tests with the existing Docker image. Rebuild and repeat from the final commit. |
+| FP-DOC-1 | [Installation instructions](INSTALL.md) | The [Docker instructions](INSTALL.md#8-docker) cover building from source, applying migrations, demo seeding, and running the test suites. |
 | FP-DOC-2 | [README.md](README.md) | Review the overview, installation link, demo accounts, limitations, and this mapping. |
 | FP-DOC-3 | [Seed runner](backend/prisma/seed.ts), [seed SQL](backend/prisma/sql/seed.sql) | [seed.test.ts](testing/src/unit/seed.test.ts) — “includes at least two candidates and two employers with valid bcrypt hashes for password123”, “includes at least two jobs with non-empty required skills”, “includes the four required FP-MATCH-1 examples against seeded candidates and jobs”, “includes applications covering all four statuses (Pending, Interviewing, Rejected, Accepted)”, “includes two Interviewing candidates without bookings eligible to race for the same available slot”. |
 | FP-TEST-1 | [Vitest configuration](testing/vitest.config.ts), [test command](testing/package.json) | Run `npm --prefix testing test`. The named functional cases appear in this table. |
-| FP-SUB-1 | [Submission protocol](reference/REQUIREMENTS.md#10-submission-protocol), [Docker instructions](INSTALL.md#8-docker) | Pending final public commit, required CI checks, and a clean Docker build, startup, seed, and test run. |
+| FP-SUB-1 | [Submission protocol](reference/REQUIREMENTS.md#10-submission-protocol), [Docker instructions](INSTALL.md#8-docker) | [GitHub Actions](.github/workflows/verify.yml) runs the test suites and builds the Docker image from `main`. The course submission uses the permanent commit URL. |
 
 ## Required deliverables checklist
 
@@ -128,11 +128,12 @@ From [`reference/REQUIREMENTS.md`](reference/REQUIREMENTS.md). All must be on `m
 - [x] One seed command with at least two candidates, two employers, two jobs with skills, the four match-score examples, all four application statuses, and two `Interviewing` candidates able to race for one slot
 - [x] Unit tests for each functional requirement, including authorization outcomes and object access, the match examples and tie-breaks, SQL parameter binding, XSS rendering, and booking conflicts
 - [x] One test command that exits nonzero on failure
-- [ ] `Dockerfile` that builds and runs the full environment from a clean checkout
-- [ ] `INSTALL.md`: prerequisite versions, install, env vars, DB setup, seed, run, test, Docker commands, troubleshooting
-- [ ] `SPEC.md`: architecture, data model, auth design, API routes, UI screens, matching, booking transaction, security controls
+- [x] `Dockerfile` that builds and runs the full environment from a clean checkout
+- [x] `INSTALL.md`: prerequisite versions, install, env vars, DB setup, seed, run, test, Docker commands, troubleshooting
+- [x] `SPEC.md`: architecture, data model, auth design, API routes, UI screens, matching, booking transaction, security controls
 - [ ] `.env.example` with placeholders only; no real secrets or personal data in the repo
-- [ ] Audit issue template and labels from `reference/templates/github/` enabled on GitHub
+- [x] [Audit issue template](.github/ISSUE_TEMPLATE/audit_bug_report.yml)
+- [ ] Audit labels from `reference/templates/github/` enabled on GitHub
 - [ ] Repository public before the Week 12 audit window
 
 ## Documents

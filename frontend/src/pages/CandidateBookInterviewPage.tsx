@@ -85,11 +85,15 @@ function CandidateBookInterviewPage() {
   }, [applicationId, previewMode])
 
   useEffect(() => {
+    setBookError(null)
+    setSelectedSlotId(null)
     void loadPage()
   }, [loadPage])
 
+  const selectedSlot = slots.find((slot) => slot.id === selectedSlotId)
+
   async function handleBook() {
-    if (!applicationId || !selectedSlotId) {
+    if (!applicationId || !selectedSlot || isBooking) {
       return
     }
 
@@ -98,9 +102,9 @@ function CandidateBookInterviewPage() {
 
     try {
       if (previewMode) {
-        bookPreviewInterviewSlot(applicationId, selectedSlotId)
+        bookPreviewInterviewSlot(applicationId, selectedSlot.id)
       } else {
-        await schedulingApi.book(applicationId, selectedSlotId)
+        await schedulingApi.book(applicationId, selectedSlot.id)
       }
       navigate('/candidate/applications', {
         replace: true,
@@ -108,7 +112,7 @@ function CandidateBookInterviewPage() {
       })
     } catch (err) {
       if (err instanceof ApiError && err.code === 'SLOT_TAKEN') {
-        setBookError('That slot was just booked by someone else. Please pick another slot.')
+        setBookError(apiErrorMessage(err))
       } else {
         setBookError(apiErrorMessage(err, 'Could not book the slot. Please try again.'))
       }
@@ -116,7 +120,7 @@ function CandidateBookInterviewPage() {
       // is stale. Reload slots and status, and drop the selection since that slot may be gone.
       if (isStaleStateError(err)) {
         setSelectedSlotId(null)
-        void loadPage({ silent: true })
+        await loadPage({ silent: true })
       }
     } finally {
       setIsBooking(false)
@@ -226,7 +230,7 @@ function CandidateBookInterviewPage() {
             <button
               type="button"
               onClick={() => void handleBook()}
-              disabled={!selectedSlotId || isBooking}
+              disabled={!selectedSlot || isBooking}
               className="btn-primary disabled:opacity-50"
             >
               {isBooking ? 'Booking…' : 'Confirm booking'}

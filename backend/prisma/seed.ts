@@ -20,11 +20,23 @@ if (!url) {
 const client = new pg.Client({ connectionString: url });
 await client.connect();
 try {
+  await client.query('BEGIN');
+  const referenceDate = process.env.DEMO_SEED_REFERENCE_DATE;
+  if (mode !== 'reset' && referenceDate !== undefined) {
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(referenceDate)) {
+      throw new Error('DEMO_SEED_REFERENCE_DATE must use YYYY-MM-DD (UTC)');
+    }
+    await client.query("SELECT set_config('csc4801.seed_reference_date', $1, true)", [referenceDate]);
+  }
   for (const file of files) {
     // No parameters, so pg sends the file as one simple query and runs every statement in it.
     await client.query(readFileSync(new URL(`./sql/${file}`, import.meta.url), 'utf8'));
-    console.log(`Ran prisma/sql/${file}`);
   }
+  await client.query('COMMIT');
+  for (const file of files) console.log(`Ran prisma/sql/${file}`);
+} catch (error) {
+  await client.query('ROLLBACK');
+  throw error;
 } finally {
   await client.end();
 }

@@ -1,0 +1,46 @@
+name: Verify recruiting platform
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: app
+          POSTGRES_PASSWORD: app
+          POSTGRES_DB: recruiting_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U app -d recruiting_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          package-manager-cache: false
+      - run: npm --prefix backend ci
+      - run: npm --prefix frontend ci
+      - run: npm --prefix testing ci
+      - run: npm --prefix testing test
+      - run: npm --prefix testing run test:bugs
+      - run: npm --prefix testing run test:live
+        env:
+          TEST_DATABASE_URL: postgres://app:app@127.0.0.1:5432/recruiting_test
+      - run: docker build -t csc4801-recruiting .

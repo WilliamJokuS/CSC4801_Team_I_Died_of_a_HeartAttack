@@ -12,11 +12,7 @@ import {
 } from '../lib/employerPreview'
 import { isPreviewUser } from '../lib/preview'
 import { formatDateTime } from '../lib/formatDateTime'
-import {
-  clampSlotStartInput,
-  minDateTimeLocalNow,
-  toLocalDateTimeInputValue,
-} from '../lib/slotTimeInput'
+import { formatUtcOffset, localDateTimeInstants, toLocalDateTimeInputValue } from '../lib/slotTimeInput'
 import type { EmployerSlot } from '../types'
 
 function defaultStartValue(): string {
@@ -47,10 +43,9 @@ function EmployerAvailabilityPage() {
   const { pushToast } = useToast()
 
   const [slots, setSlots] = useState<EmployerSlot[]>([])
-  const [minInput, setMinInput] = useState(minDateTimeLocalNow)
-  const [startInput, setStartInput] = useState(() =>
-    clampSlotStartInput(defaultStartValue(), minDateTimeLocalNow()),
-  )
+  const [nowMs, setNowMs] = useState(Date.now)
+  const [startInput, setStartInput] = useState(defaultStartValue)
+  const [selectedInstant, setSelectedInstant] = useState('')
   const [isLoading, setIsLoading] = useState(true)
   const [isCreating, setIsCreating] = useState(false)
   const [deletingId, setDeletingId] = useState<string | null>(null)
@@ -59,7 +54,6 @@ function EmployerAvailabilityPage() {
   const [actionError, setActionError] = useState<string | null>(null)
   const [infoMessage, setInfoMessage] = useState<string | null>(null)
 
-  // `silent` refreshes in place (no full-page spinner) after a conflict, so the error stays visible.
   const loadSlots = useCallback(async ({ silent = false }: { silent?: boolean } = {}) => {
     if (!silent) {
       setIsLoading(true)
@@ -89,17 +83,11 @@ function EmployerAvailabilityPage() {
   }, [loadSlots])
 
   useEffect(() => {
-    const tick = () => {
-      const nextMin = minDateTimeLocalNow()
-      setMinInput(nextMin)
-      setStartInput((current) => clampSlotStartInput(current, nextMin))
-    }
-    tick()
-    const id = window.setInterval(tick, 60_000)
+    const id = window.setInterval(() => setNowMs(Date.now()), 60_000)
     return () => window.clearInterval(id)
   }, [])
 
-  const nowMs = Date.now()
+  const instants = useMemo(() => localDateTimeInstants(startInput), [startInput])
   const { upcoming, past } = useMemo(() => {
     const up: EmployerSlot[] = []
     const old: EmployerSlot[] = []
@@ -116,22 +104,30 @@ function EmployerAvailabilityPage() {
   async function handleCreate(event: FormEvent) {
     event.preventDefault()
     setActionError(null)
-
-    // Validate before touching isCreating so a bad value can never leave the button stuck.
-    const clamped = clampSlotStartInput(startInput, minInput)
-    const start = new Date(clamped)
-    if (!clamped || Number.isNaN(start.getTime())) {
-      setActionError('Please choose a valid start date and time.')
+    if (!/(?:00|30)$/.test(startInput)) {
+      setActionError('Enter a time on the hour or half hour.')
       return
     }
-    setStartInput(clamped)
+    if (instants.length === 0) {
+      setActionError('This time does not exist in your time zone. Choose another time.')
+      return
+    }
+    const start = instants.length === 1 ? instants[0] : instants.find((date) => date.toISOString() === selectedInstant)
+    if (!start) {
+      setActionError('Choose a time zone offset for this repeated time.')
+      return
+    }
+    if (start.getTime() <= Date.now()) {
+      setActionError('Choose a start time in the future.')
+      return
+    }
+
+    setIsCreating(true)
     const end = new Date(start.getTime() + 30 * 60 * 1000)
     const payload = {
       start_time: start.toISOString(),
       end_time: end.toISOString(),
     }
-
-    setIsCreating(true)
 
     try {
       if (previewMode) {
@@ -145,8 +141,8 @@ function EmployerAvailabilityPage() {
           ),
         )
       }
-      // Move to the next half hour so clicking "Add slot" again doesn't submit the same time.
       setStartInput(toLocalDateTimeInputValue(end))
+      setSelectedInstant('')
       pushToast('Availability slot added', 'success')
     } catch (err) {
       setActionError(apiErrorMessage(err, 'Could not create slot. Please try again.'))
@@ -174,11 +170,7 @@ function EmployerAvailabilityPage() {
       pushToast('Slot deleted', 'error')
     } catch (err) {
       setActionError(apiErrorMessage(err, 'Could not delete slot. Please try again.'))
-      // e.g. 409 SLOT_BOOKED: a candidate booked it after we loaded the list. Reload so the
-      // slot shows as booked (Delete disabled) instead of still saying "Available".
-      if (isStaleStateError(err)) {
-        void loadSlots({ silent: true })
-      }
+      if (isStaleStateError(err)) await loadSlots({ silent: true })
     } finally {
       setDeletingId(null)
     }
@@ -269,16 +261,34 @@ function EmployerAvailabilityPage() {
           type="datetime-local"
           required
           step={1800}
-          min={minInput}
           value={startInput}
-          // Store raw keystrokes; rounding to :00/:30 happens on blur and submit, otherwise
-          // typing "3" on the way to ":30" would snap straight back to ":00".
-          onChange={(e) => setStartInput(e.target.value)}
-          onBlur={() => setStartInput((value) => clampSlotStartInput(value, minInput))}
+          onChange={(e) => {
+            setStartInput(e.target.value)
+            setSelectedInstant('')
+          }}
           className="input-field mt-2 max-w-xs py-2"
         />
 
-        {actionError && <p className="mt-3 text-sm text-red-600">{actionError}</p>}
+        {instants.length > 1 && (
+          <label className="mt-3 block text-sm font-medium text-gray-700">
+            Time zone offset for the repeated time
+            <select
+              required
+              value={selectedInstant}
+              onChange={(e) => setSelectedInstant(e.target.value)}
+              className="input-field mt-1 block max-w-xs py-2"
+            >
+              <option value="">Choose an offset</option>
+              {instants.map((date) => (
+                <option key={date.toISOString()} value={date.toISOString()} disabled={date.getTime() <= nowMs}>
+                  {formatUtcOffset(date)}
+                </option>
+              ))}
+            </select>
+          </label>
+        )}
+
+        {actionError && <p role="alert" className="mt-3 text-sm text-red-600">{actionError}</p>}
 
         <button type="submit" disabled={isCreating} className="btn-primary mt-4 disabled:opacity-50">
           {isCreating ? 'Creating…' : 'Add slot'}

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState, type FormEvent } from 'react'
+import { useEffect, useMemo, useState, type FormEvent } from 'react'
 import { Link } from 'react-router-dom'
 import { profileApi } from '../api/endpoints'
 import LoadingScreen from '../components/LoadingScreen'
@@ -6,7 +6,7 @@ import SkillsField from '../components/SkillsField'
 import { useAuth } from '../hooks/useAuth'
 import { apiErrorMessage } from '../lib/apiErrorMessage'
 import { initialsFromDisplayName } from '../lib/companyLogoStyle'
-import { stringArraysEqual, withDraftEntry } from '../lib/formChange'
+import { hasPendingText, stringArraysEqual } from '../lib/formChange'
 import { LIMITS } from '../lib/formLimits'
 import { isPreviewUser, PREVIEW_PROFILE_KEY } from '../lib/preview'
 
@@ -52,16 +52,10 @@ const RESUME_MAX = 20_000
 function CandidateProfilePage() {
   const { user, updateUser } = useAuth()
   const previewMode = isPreviewUser(user?.id)
-  // Only a fallback while loading; read through a ref so updating the header name after a
-  // save (updateUser) doesn't re-trigger the load effect and reload the whole form.
-  const fallbackNameRef = useRef(user?.display_name ?? '')
-  useEffect(() => {
-    fallbackNameRef.current = user?.display_name ?? ''
-  }, [user?.display_name])
+  const previewDefaultName = previewMode ? user?.display_name ?? '' : ''
 
   const [displayName, setDisplayName] = useState('')
   const [skills, setSkills] = useState<string[]>([])
-  const [skillDraft, setSkillDraft] = useState('')
   const [resumeText, setResumeText] = useState('')
 
   const [isLoading, setIsLoading] = useState(true)
@@ -69,10 +63,8 @@ function CandidateProfilePage() {
   const [error, setError] = useState<string | null>(null)
   const [success, setSuccess] = useState<string | null>(null)
   const [loadWarning, setLoadWarning] = useState<string | null>(null)
-  // The PUT replaces the whole profile, so saving after a failed load would overwrite the real
-  // skills/résumé with blanks. Saving stays blocked until a load succeeds.
   const [loadError, setLoadError] = useState<string | null>(null)
-  const [reloadKey, setReloadKey] = useState(0)
+  const [loadAttempt, setLoadAttempt] = useState(0)
   const [saved, setSaved] = useState({ displayName: '', skills: [] as string[], resumeText: '' })
 
   useEffect(() => {
@@ -85,7 +77,7 @@ function CandidateProfilePage() {
       setLoadError(null)
 
       if (previewMode) {
-        const preview = loadPreviewProfile(fallbackNameRef.current)
+        const preview = loadPreviewProfile(previewDefaultName)
         if (!cancelled) {
           setDisplayName(preview.display_name)
           setSkills(preview.skills)
@@ -115,7 +107,7 @@ function CandidateProfilePage() {
         }
       } catch (err) {
         if (!cancelled) {
-          setLoadError(`Could not load your profile (${apiErrorMessage(err)}).`)
+          setLoadError(`Could not load profile (${apiErrorMessage(err)}).`)
         }
       } finally {
         if (!cancelled) {
@@ -128,17 +120,18 @@ function CandidateProfilePage() {
     return () => {
       cancelled = true
     }
-  }, [previewMode, user?.id, reloadKey])
+  }, [loadAttempt, previewDefaultName, previewMode, user?.id])
 
-  async function handleSubmit(event: FormEvent) {
+  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
+    if (isLoading || loadError || isSaving) return
     setError(null)
     setSuccess(null)
 
-    if (loadError) {
+    if (hasPendingText(event.currentTarget, 'profile_skills')) {
+      setError('Add or clear the typed skill before saving.')
       return
     }
-
     if (resumeText.length > RESUME_MAX) {
       setError(`Resume must be at most ${RESUME_MAX.toLocaleString()} characters.`)
       return
@@ -146,30 +139,26 @@ function CandidateProfilePage() {
 
     setIsSaving(true)
 
-    // Include a skill that was typed but not yet added with Enter / "Add".
-    const skillsToSave = withDraftEntry(skills, skillDraft, LIMITS.skillMaxLength, LIMITS.skillsMaxCount)
-    setSkills(skillsToSave)
-    setSkillDraft('')
-
     const payload = {
       display_name: displayName.trim(),
-      skills: skillsToSave,
+      skills,
       resume_text: resumeText,
     }
 
     try {
       if (previewMode) {
         savePreviewProfile(payload)
+        updateUser?.({ display_name: payload.display_name })
         setSaved({
           displayName: payload.display_name,
           skills: payload.skills,
           resumeText: payload.resume_text,
         })
-        updateUser?.({ display_name: payload.display_name })
         setSuccess('Profile saved locally (preview mode).')
       } else {
         const updated = await profileApi.updateCandidate(payload)
         setDisplayName(updated.display_name)
+        updateUser?.({ display_name: updated.display_name })
         setSkills(updated.skills)
         setResumeText(updated.resume_text)
         setSaved({
@@ -177,7 +166,6 @@ function CandidateProfilePage() {
           skills: updated.skills,
           resumeText: updated.resume_text,
         })
-        updateUser?.({ display_name: updated.display_name })
         setSuccess('Profile saved.')
       }
     } catch (err) {
@@ -191,9 +179,8 @@ function CandidateProfilePage() {
     () =>
       displayName.trim() !== saved.displayName.trim() ||
       !stringArraysEqual(skills, saved.skills) ||
-      skillDraft.trim() !== '' ||
       resumeText !== saved.resumeText,
-    [displayName, resumeText, saved, skillDraft, skills],
+    [displayName, resumeText, saved, skills],
   )
 
   if (isLoading) {
@@ -206,12 +193,9 @@ function CandidateProfilePage() {
 
   if (loadError) {
     return (
-      <div role="alert" className="rounded-panel border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">
-        <p>{loadError}</p>
-        <p className="mt-1">
-          Editing is disabled until your saved profile loads, so nothing you saved before gets overwritten.
-        </p>
-        <button type="button" onClick={() => setReloadKey((key) => key + 1)} className="btn-secondary mt-3">
+      <div className="card-panel space-y-3">
+        <p role="alert" className="text-sm text-red-600">{loadError}</p>
+        <button type="button" className="btn-primary" onClick={() => setLoadAttempt((attempt) => attempt + 1)}>
           Retry
         </button>
       </div>
@@ -260,6 +244,7 @@ function CandidateProfilePage() {
                 required
                 maxLength={LIMITS.displayNameMaxLength}
                 value={displayName}
+                disabled={isSaving}
                 onChange={(e) => setDisplayName(e.target.value)}
                 className="input-field rounded-[9px] px-[13px] py-3"
               />
@@ -267,22 +252,20 @@ function CandidateProfilePage() {
                 {displayName.length} / {LIMITS.displayNameMaxLength}
               </span>
             </label>
-            {/* A div, not a <label>: SkillsField contains buttons, which can't live inside a label. */}
-            <div className="flex flex-col gap-2 text-xs font-bold text-[#5d6e62] sm:col-span-2">
-              <label htmlFor="profile_skills">Skills (used for match scores)</label>
+            <label className="flex flex-col gap-2 text-xs font-bold text-[#5d6e62] sm:col-span-2">
+              Skills (used for match scores)
               <SkillsField
                 skills={skills}
                 onChange={setSkills}
-                draft={skillDraft}
-                onDraftChange={setSkillDraft}
+                disabled={isSaving}
                 inputId="profile_skills"
                 label=""
                 hint="Press Enter to add each skill."
               />
-            </div>
+            </label>
           </div>
 
-          {error && <p className="text-sm text-red-600">{error}</p>}
+          {error && <p role="alert" className="text-sm text-red-600">{error}</p>}
           {success && <p className="text-sm text-green-700">{success}</p>}
 
           <button type="submit" disabled={isSaving || !isDirty} className="btn-primary mt-4">
@@ -302,6 +285,7 @@ function CandidateProfilePage() {
                 id="resume_text"
                 rows={8}
                 value={resumeText}
+                disabled={isSaving}
                 onChange={(e) => setResumeText(e.target.value)}
                 placeholder="Paste or type your resume here…"
                 className="input-field min-h-[100px] w-full resize-y rounded-[9px] text-left text-sm"

@@ -11,9 +11,11 @@ cd backend
 npm ci                                            # also runs `prisma generate`
 cp .env.example .env                              # placeholders; set a real JWT_SECRET locally
 docker compose -f docker-compose.dev.yml up -d    # local Postgres (recruiting + recruiting_test)
-npm run migrate:dev                               # apply / create migrations
+npm run migrate                                  # apply committed migrations
 npm run dev                                       # http://localhost:8080/api
 ```
+
+For a local PostgreSQL installation, install the `postgresql-contrib` package if needed to make the `btree_gist` extension available. The slot-overlap migration creates the extension in the configured database.
 
 ## Layout
 
@@ -39,9 +41,10 @@ npm run dev                                       # http://localhost:8080/api
 
 - Passwords: bcrypt, cost 12, random salt per hash. Passwords over 72 bytes are rejected rather than silently truncated.
 - Emails are trimmed and lowercased before storage/lookup; uniqueness is enforced by the `users.email` UNIQUE constraint (`409 EMAIL_TAKEN`).
-- Tokens: HS256 JWT, `sub` = user id, `role` claim, expiry `JWT_EXPIRES_IN` (24h). No refresh tokens.
+- Tokens: HS256 JWT with the user ID in `sub` and the account role in `role`. `JWT_EXPIRES_IN` defaults to `24h` and must yield a lifetime of at least one second. The server validates it at startup. No refresh tokens.
 - Logout is stateless: `POST /api/auth/logout` returns `204` and the client discards the token.
 - Login returns the same `401 INVALID_CREDENTIALS` for an unknown email and a wrong password, and runs a bcrypt compare in both cases, so neither the response nor its timing reveals which emails are registered.
+- The running server allows 20 login or registration requests per minute per client address and four in-flight auth requests per server process. Excess requests return `429 AUTH_RATE_LIMITED` or `503 AUTH_BUSY` with `Retry-After`. If a reverse proxy forwards client addresses, set `AUTH_TRUSTED_PROXIES` to a comma-separated list of trusted proxy addresses or CIDRs.
 - Registration creates the matching `candidate_profiles` / `company_profiles` row in the same insert. An employer's `company_name` starts as their `display_name`.
 - Protected routes: `router.get(path, requireAuth(secret), requireRole('Employer'), handler)`. Ownership checks (403 vs 404) belong in each service.
 
@@ -70,12 +73,17 @@ npm run dev                                       # http://localhost:8080/api
 | 409 | `ALREADY_BOOKED` | Book when the application already has a slot |
 | 409 | `SLOT_TAKEN` | Book a slot that's already booked (message `Slot already booked`) |
 | 409 | `SLOT_IN_PAST` | Book a slot whose start time has passed |
+| 503 | `DB_UNAVAILABLE` | Unreachable database on health check or a transaction timeout while creating or booking a slot |
 
 Response shapes: `../specs/002-profile-and-job-shapes.md` (profiles, jobs), `../specs/003-application-and-scheduling-shapes.md` (applications, scheduling), and `../specs/004-job-tags-and-ui-fields.md` (job `tags` and `company_description`, `applicant_count` on `GET /api/jobs/mine`, `booking` on `GET /api/employers/me/availability`).
 
 ## Booking transaction (FP-SCHED-3)
 
-`bookSlot` runs in one transaction: lock the application row, then the slot row (`FOR UPDATE`, always in that order), check eligibility, then claim the slot with a conditional `UPDATE availability_slots SET is_booked = true WHERE id = ? AND is_booked = false AND start_time > now`. Two racing candidates serialize on the slot's row lock; the second reads the slot after the first commits and gets `409 SLOT_TAKEN`. `applications.interview_slot_id UNIQUE` backs this up (a duplicate link is also mapped to `409`). Any failure rolls back both rows.
+The 50-item and 50-character skill limits apply to submitted data before normalization. Normalization still trims, lowercases, and removes blank and duplicate values before storing.
+
+Slot timestamps must have a timezone and be representable to millisecond precision. Additional fractional digits are accepted when they are all zero. PostgreSQL serializes slot inserts for each employer before applying the overlap constraint.
+
+`bookSlot` checks application ownership before validating the booking body. In the transaction it locks the candidate's application row, rechecks ownership, then locks the slot row. After checking eligibility it claims the slot with a conditional `UPDATE availability_slots SET is_booked = true WHERE id = ? AND is_booked = false AND start_time > now`. Two racing candidates serialize on the slot's row lock. The second reads the slot after the first commits and gets `409 SLOT_TAKEN`. `applications.interview_slot_id UNIQUE` backs this up (a duplicate link is also mapped to `409`). Any failure rolls back both rows.
 
 ## Backend repair validation
 
@@ -114,8 +122,8 @@ npm run migrate
 npm run db:seed
 ```
 
-The overlap migration was verified on a clean schema by applying its SQL in order with the other migrations. On an existing schema, overlapping rows can prevent it from applying (`23P01`). Check existing slots before deployment and preserve linked bookings when resolving overlaps.
+Before applying the overlap constraint, `npm run migrate` removes conflicting legacy slots. It gives booked or linked slots priority and chooses randomly between slots of equal priority. If it removes a linked slot, the application remains and its booking link is cleared. This cleanup runs only on schemas that lack the overlap constraint.
 
 ## Demo data
 
-`npx prisma db seed` (or `npm run db:seed`) resets and seeds; `npm run db:reset` only empties the tables. Local/demo credentials, password `password123` for all: candidates `alice@`, `bob@`, `chen@`, `diana@`, `ethan@`, `fatima@`, `gabriel@`, `hannah@`, `ivan@`, `julia@demo.test`; employers `hr@acme.demo.test`, `hr@northwind.demo.test`, `hr@harbor.demo.test`.
+`npx prisma db seed` (or `npm run db:seed`) resets and seeds in one transaction. `npm run db:reset` only empties the tables. Seeded interview slots start the following UTC day. Set `DEMO_SEED_REFERENCE_DATE=YYYY-MM-DD` to reproduce a specific schedule. Local/demo credentials, password `password123` for all: candidates `alice@`, `bob@`, `chen@`, `diana@`, `ethan@`, `fatima@`, `gabriel@`, `hannah@`, `ivan@`, `julia@demo.test`; employers `hr@acme.demo.test`, `hr@northwind.demo.test`, `hr@harbor.demo.test`.

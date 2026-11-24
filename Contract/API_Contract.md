@@ -117,7 +117,7 @@ Failures return `400 VALIDATION_ERROR`, with the offending field named in `messa
 | `password` | 8–72 bytes |
 | `display_name` | non-empty after trim, ≤ 100 chars (stored trimmed) |
 | `role` | `Candidate` or `Employer` |
-| `skills`, `required_skills` | array of strings, ≤ 50 items, each ≤ 50 chars; normalized before storing, so `[" Python", "python", ""]` is stored and returned as `["python"]` |
+| `skills`, `required_skills` | The submitted array may contain up to 50 strings of up to 50 characters each. Valid lists are normalized before storing, so `[" Python", "python", ""]` is stored and returned as `["python"]` |
 | `tags` | optional, default `[]`; array of strings, ≤ 10 after normalization, each ≤ 30 chars after trim; trimmed, empties dropped, duplicates removed case-insensitively keeping the first spelling, so `[" Remote", "remote", "Full-time"]` → `["Remote", "Full-time"]` |
 | `resume_text` | string, ≤ 20,000 chars, may be empty |
 | `company_name` | non-empty after trim, ≤ 200 chars |
@@ -125,7 +125,7 @@ Failures return `400 VALIDATION_ERROR`, with the offending field named in `messa
 | `title` | non-empty after trim, ≤ 200 chars |
 | `description` (job) | non-empty after trim, ≤ 10,000 chars |
 | `status` | one of the four `ApplicationStatus` values |
-| `start_time`, `end_time` | ISO 8601 with `Z` or an offset; `end_time` after `start_time`, exactly 30 minutes later; `start_time` in the future |
+| `start_time`, `end_time` | ISO 8601 with `Z` or an offset. Values must be exactly representable at millisecond precision. Fractional digits beyond the third must be zero. `start_time` must be in the future and `end_time` must be exactly 30 minutes later. |
 | `slot_id` | UUID |
 
 Request bodies are limited to 100 kB (`413 PAYLOAD_TOO_LARGE`).
@@ -140,6 +140,8 @@ Request bodies are limited to 100 kB (`413 PAYLOAD_TOO_LARGE`).
 | POST | `/api/auth/login` | `{ email, password }` | `200 { token, user: AuthUser }` | none; `400`, `401 INVALID_CREDENTIALS` (same code and message for unknown email and wrong password) |
 | POST | `/api/auth/logout` | — | `204` | authenticated; `401` |
 | GET | `/api/me` | — | `200 AuthUser` | authenticated; `401` (missing, invalid, or expired token) |
+
+The running server may respond to registration or login with `429 AUTH_RATE_LIMITED` or `503 AUTH_BUSY`. Both responses include a `Retry-After` header.
 
 Logout is stateless: the server does not revoke the JWT, and the client discards the token. Registration creates the matching candidate or company profile; an employer's `company_name` starts as their `display_name`.
 
@@ -185,7 +187,7 @@ The match score (FP-MATCH-1) must be one shared implementation called by both `G
 | Method | Path | Request body | Response | Auth |
 |---|---|---|---|---|
 | GET | `/api/employers/me/availability` | — | `200 EmployerSlot[]` (booked and open, earliest first) | Employer; `401`, `403` |
-| POST | `/api/employers/me/availability` | `{ start_time, end_time }` | `201 AvailabilitySlot` | Employer; `400` on missing timezone / end not after start / not exactly 30 minutes / start not in the future; `401`, `403` |
+| POST | `/api/employers/me/availability` | `{ start_time, end_time }` | `201 AvailabilitySlot` | Employer; `400` on missing timezone / end not after start / not exactly 30 minutes / start not in the future; `409 SLOT_OVERLAP` if it overlaps one of the employer's existing slots (back-to-back is fine); `401`, `403` |
 | DELETE | `/api/employers/me/availability/{id}` | — | `204`, or `409 SLOT_BOOKED` if booked | Employer, owner only; `401`, `403`, `404` |
 | GET | `/api/applications/{id}/available-slots` | — | `200 AvailabilitySlot[]` (unbooked, future, belonging to the job's employer) | Candidate, application owner only; `401`, `403`, `404` |
 | POST | `/api/applications/{id}/book` | `{ slot_id }` | `200 Application` (with `interview_slot_id` set) | Candidate, application owner only; `400`, `401`, `403`, `404`, `409` |

@@ -44,10 +44,15 @@ function AuthPage() {
       return
     }
     setMessage(null)
-    const stored = localStorage.getItem(REMEMBER_KEY)
-    if (stored && mode === 'login') {
-      setEmail(stored)
-      setRemember(true)
+    if (mode !== 'login') return
+    try {
+      const stored = localStorage.getItem(REMEMBER_KEY)
+      if (stored) {
+        setEmail(stored)
+        setRemember(true)
+      }
+    } catch {
+      // Remembering an email is optional when browser storage is unavailable.
     }
   }, [mode, demoRequested])
 
@@ -55,10 +60,9 @@ function AuthPage() {
     return <LoadingScreen />
   }
 
-  const returnTo = safeReturnPath((location.state as { from?: string } | null)?.from)
-
   if (user) {
     const home = user.role === 'Candidate' ? '/candidate' : '/employer'
+    const returnTo = safeReturnPath((location.state as { from?: string } | null)?.from, home)
     return <Navigate to={returnTo ?? home} replace />
   }
 
@@ -103,12 +107,18 @@ function AuthPage() {
       setMessage({ type: 'error', text: 'Please enter a valid email address.' })
       return
     }
-    if (password.length < 8) {
-      setMessage({ type: 'error', text: 'Use a password of at least 8 characters.' })
-      return
-    }
-    if (mode === 'register' && password !== confirmPassword) {
-      setMessage({ type: 'error', text: 'Passwords do not match.' })
+    if (mode === 'register') {
+      const passwordBytes = new TextEncoder().encode(password).byteLength
+      if (passwordBytes < 8 || passwordBytes > 72 || password.includes('\0')) {
+        setMessage({ type: 'error', text: 'Use a password of 8–72 UTF-8 bytes without NUL characters.' })
+        return
+      }
+      if (password !== confirmPassword) {
+        setMessage({ type: 'error', text: 'Passwords do not match.' })
+        return
+      }
+    } else if (!password) {
+      setMessage({ type: 'error', text: 'Enter your password.' })
       return
     }
 
@@ -116,10 +126,11 @@ function AuthPage() {
     try {
       if (mode === 'login') {
         await login(trimmedEmail, password)
-        if (remember) {
-          localStorage.setItem(REMEMBER_KEY, trimmedEmail)
-        } else {
-          localStorage.removeItem(REMEMBER_KEY)
+        try {
+          if (remember) localStorage.setItem(REMEMBER_KEY, trimmedEmail)
+          else localStorage.removeItem(REMEMBER_KEY)
+        } catch {
+          // The session is active even if the email preference cannot be saved.
         }
       } else {
         await register({
@@ -129,8 +140,6 @@ function AuthPage() {
           role,
         })
       }
-      const home = role === 'Candidate' ? '/candidate' : '/employer'
-      navigate(returnTo ?? home, { replace: true })
     } catch (err) {
       setMessage({ type: 'error', text: apiErrorMessage(err) })
     } finally {
@@ -297,7 +306,6 @@ function AuthPage() {
                 required
                 autoComplete={isRegister ? 'new-password' : 'current-password'}
                 placeholder="Enter your password"
-                minLength={8}
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 className="min-w-0 flex-1 border-0 bg-transparent text-[13px] text-[#283b32] outline-none placeholder:text-[#afbab2]"

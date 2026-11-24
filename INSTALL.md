@@ -8,7 +8,7 @@ Use the Docker instructions to run the built app, or use Node.js for local devel
 
 | Tool | Version | Needed for |
 |---|---|---|
-| Node.js | 22.12+ on Node 22, or Node 24 | frontend, backend, tests outside Docker |
+| Node.js | 22.13+ on Node 22, or Node 24 | frontend, backend, tests outside Docker |
 | npm | 10 or newer (ships with Node.js) | installing dependencies |
 | PostgreSQL | 16 or newer | database (local run without Docker) |
 | Docker | 24 or newer | building and running the app and PostgreSQL containers |
@@ -98,7 +98,7 @@ The unit suite runs non-interactively, exits nonzero on failure, and uses isolat
 
 ## 8. Docker
 
-Run these commands from the repository root with the root `Dockerfile` present. The app image serves the compiled frontend and API on port 8080. PostgreSQL 16 runs in a second container on a private Docker network. The app container generates a JWT secret and applies migrations on startup.
+Run these commands from the repository root. The app image serves the compiled frontend and API on port 8080. PostgreSQL 16 runs in a second container on a private Docker network. The app container generates a JWT secret and applies migrations on startup.
 
 ```bash
 docker build -t csc4801-recruiting .
@@ -119,16 +119,25 @@ docker run -d --name csc4801-docker-app --network csc4801-docker \
   -p 127.0.0.1:8080:8080 csc4801-recruiting
 ```
 
-After startup, check the API, reset and seed the local demo database, and run the unit tests inside the app container. Run the migration command if you need to apply the committed migrations manually.
+After startup, check the API, reset and seed the local demo database, and run the tests inside the app container. The seed command replaces the database contents in one transaction. The image runs migrations on startup.
 
 ```bash
 curl --retry 15 --retry-connrefused --retry-delay 1 -fsS http://127.0.0.1:8080/api/health
 docker exec csc4801-docker-app npm --prefix /app/backend run migrate
 docker exec csc4801-docker-app npm --prefix /app/backend run db:seed
 docker exec csc4801-docker-app npm --prefix /app/testing test
+docker exec csc4801-docker-app npm --prefix /app/testing run test:bugs
 ```
 
-Open [the app](http://127.0.0.1:8080), sign in as `alice@demo.test` with `password123`, and open the candidate job list and applications. The database persists in `csc4801-docker-data`. Stop and restart the containers with the following commands. An app restart generates a new JWT secret and signs users out.
+Run the live PostgreSQL suite against its own disposable database. The local Docker database user can create the temporary databases used by the migration tests.
+
+```bash
+docker exec csc4801-docker-db createdb -U app recruiting_test
+docker exec -e TEST_DATABASE_URL=postgres://app:app@db:5432/recruiting_test \
+  csc4801-docker-app npm --prefix /app/testing run test:live
+```
+
+Open [the app](http://127.0.0.1:8080), sign in as `alice@demo.test` with `password123`, and open the candidate job list and applications. For the booking demo, sign in as Alice and Bob in separate browser profiles and open their Data Analyst applications. Both see the same future Acme slots. The database persists in `csc4801-docker-data`. Stop and restart the containers with the following commands. An app restart generates a new JWT secret and signs users out.
 
 ```bash
 docker stop csc4801-docker-app csc4801-docker-db

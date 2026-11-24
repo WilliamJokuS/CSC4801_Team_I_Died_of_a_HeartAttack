@@ -19,10 +19,8 @@ function EmployerProfilePage() {
   const [error, setError] = useState<string | null>(null)
   const [success, setSuccess] = useState<string | null>(null)
   const [loadWarning, setLoadWarning] = useState<string | null>(null)
-  // The PUT replaces the whole company profile, so saving after a failed load would wipe the
-  // stored description. Saving stays blocked until a load succeeds.
   const [loadError, setLoadError] = useState<string | null>(null)
-  const [reloadKey, setReloadKey] = useState(0)
+  const [loadAttempt, setLoadAttempt] = useState(0)
 
   useEffect(() => {
     let cancelled = false
@@ -54,7 +52,7 @@ function EmployerProfilePage() {
         }
       } catch (err) {
         if (!cancelled) {
-          setLoadError(`Could not load your company profile (${apiErrorMessage(err)}).`)
+          setLoadError(`Could not load profile (${apiErrorMessage(err)}).`)
         }
       } finally {
         if (!cancelled) {
@@ -67,15 +65,13 @@ function EmployerProfilePage() {
     return () => {
       cancelled = true
     }
-  }, [previewMode, user?.id, reloadKey])
+  }, [loadAttempt, previewMode])
 
   async function handleSubmit(event: FormEvent) {
     event.preventDefault()
+    if (isLoading || loadError || isSaving) return
     setError(null)
     setSuccess(null)
-    if (loadError) {
-      return
-    }
     setIsSaving(true)
 
     const payload = {
@@ -115,18 +111,12 @@ function EmployerProfilePage() {
 
   if (loadError) {
     return (
-      <>
-        <h1 className="text-2xl font-semibold text-gray-900">Company profile</h1>
-        <div role="alert" className="mt-4 rounded-md border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">
-          <p>{loadError}</p>
-          <p className="mt-1">
-            Editing is disabled until your saved profile loads, so nothing you saved before gets overwritten.
-          </p>
-          <button type="button" onClick={() => setReloadKey((key) => key + 1)} className="btn-secondary mt-3">
-            Retry
-          </button>
-        </div>
-      </>
+      <div className="card-panel space-y-3">
+        <p role="alert" className="text-sm text-red-600">{loadError}</p>
+        <button type="button" className="btn-primary" onClick={() => setLoadAttempt((attempt) => attempt + 1)}>
+          Retry
+        </button>
+      </div>
     )
   }
 
@@ -157,6 +147,7 @@ function EmployerProfilePage() {
               required
               maxLength={LIMITS.companyNameMaxLength}
               value={companyName}
+              disabled={isSaving}
               onChange={(e) => setCompanyName(e.target.value)}
               className="input-field mt-1 py-2"
             />
@@ -173,6 +164,7 @@ function EmployerProfilePage() {
               id="description"
               rows={6}
               value={description}
+              disabled={isSaving}
               onChange={(e) => setDescription(e.target.value)}
               className="mt-1 w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-gray-500 focus:outline-none"
             />

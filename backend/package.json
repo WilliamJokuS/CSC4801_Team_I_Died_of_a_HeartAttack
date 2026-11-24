@@ -14,7 +14,8 @@
     "seed": "prisma db seed",
     "postinstall": "prisma generate",
     "db:reset": "tsx prisma/seed.ts reset",
-    "db:seed": "tsx prisma/seed.ts all"
+    "db:seed": "tsx prisma/seed.ts all",
+    "premigrate": "tsx prisma/check-slot-overlaps.ts"
   },
   "license": "MIT",
   "dependencies": {
@@ -23,9 +24,10 @@
     "bcryptjs": "^3.0.3",
     "dotenv": "^18.0.4",
     "express": "^5.2.1",
+    "express-rate-limit": "^8.7.5",
     "jsonwebtoken": "^9.0.3",
     "pg": "^8.23.0",
-    "zod": "^4.6.5"
+    "zod": "^4.6.6"
   },
   "devDependencies": {
     "@types/express": "^5.0.6",
@@ -39,6 +41,6 @@
   "private": true,
   "type": "module",
   "engines": {
-    "node": ">=22"
+    "node": "^22.13.0 || >=24.0.0"
   }
 }

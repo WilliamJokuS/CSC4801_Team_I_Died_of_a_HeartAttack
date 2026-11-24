@@ -7,7 +7,7 @@ import TagsField from '../components/TagsField'
 import { ApiError } from '../api/client'
 import { useAuth } from '../hooks/useAuth'
 import { apiErrorMessage } from '../lib/apiErrorMessage'
-import { stringArraysEqual, withDraftEntry } from '../lib/formChange'
+import { hasPendingText, stringArraysEqual } from '../lib/formChange'
 import { LIMITS } from '../lib/formLimits'
 import {
   createPreviewEmployerJob,
@@ -30,8 +30,6 @@ function EmployerJobFormPage() {
   const [description, setDescription] = useState('')
   const [requiredSkills, setRequiredSkills] = useState<string[]>([])
   const [tags, setTags] = useState<string[]>([])
-  const [skillDraft, setSkillDraft] = useState('')
-  const [tagDraft, setTagDraft] = useState('')
   const [savedSnapshot, setSavedSnapshot] = useState({
     title: '',
     description: '',
@@ -126,9 +124,6 @@ function EmployerJobFormPage() {
   }, [isEdit, jobId, previewMode, user?.id])
 
   const isDirty = useMemo(() => {
-    if (skillDraft.trim() !== '' || tagDraft.trim() !== '') {
-      return true
-    }
     if (!isEdit) {
       return (
         title.trim().length > 0 ||
@@ -141,28 +136,25 @@ function EmployerJobFormPage() {
       title.trim() !== savedSnapshot.title.trim() ||
       description.trim() !== savedSnapshot.description.trim() ||
       !stringArraysEqual(requiredSkills, savedSnapshot.requiredSkills) ||
-      !stringArraysEqual(tags, savedSnapshot.tags)
+      tags.length !== savedSnapshot.tags.length ||
+      tags.some((tag, index) => tag.trim() !== savedSnapshot.tags[index].trim())
     )
-  }, [description, isEdit, requiredSkills, savedSnapshot, skillDraft, tagDraft, tags, title])
+  }, [description, isEdit, requiredSkills, savedSnapshot, tags, title])
 
-  async function handleSubmit(event: FormEvent) {
+  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
+    if (hasPendingText(event.currentTarget, 'job_skills') || hasPendingText(event.currentTarget, 'job_tags')) {
+      setError('Add or clear the typed skills or tags before saving.')
+      return
+    }
     setError(null)
     setIsSaving(true)
-
-    // Include a skill/tag that was typed but not yet added with Enter / "Add".
-    const skillsToSave = withDraftEntry(requiredSkills, skillDraft, LIMITS.skillMaxLength, LIMITS.skillsMaxCount)
-    const tagsToSave = withDraftEntry(tags, tagDraft, LIMITS.tagMaxLength, LIMITS.tagsMaxCount)
-    setRequiredSkills(skillsToSave)
-    setTags(tagsToSave)
-    setSkillDraft('')
-    setTagDraft('')
 
     const payload = {
       title: title.trim(),
       description: description.trim(),
-      required_skills: skillsToSave,
-      tags: tagsToSave,
+      required_skills: requiredSkills,
+      tags,
     }
 
     try {
@@ -276,16 +268,10 @@ function EmployerJobFormPage() {
           />
         </div>
 
-        <SkillsField
-          skills={requiredSkills}
-          onChange={setRequiredSkills}
-          draft={skillDraft}
-          onDraftChange={setSkillDraft}
-          inputId="job_skills"
-        />
-        <TagsField tags={tags} onChange={setTags} draft={tagDraft} onDraftChange={setTagDraft} inputId="job_tags" />
+        <SkillsField skills={requiredSkills} onChange={setRequiredSkills} inputId="job_skills" />
+        <TagsField tags={tags} onChange={setTags} inputId="job_tags" />
 
-        {error && <p className="text-sm text-red-600">{error}</p>}
+        {error && <p role="alert" className="text-sm text-red-600">{error}</p>}
 
         <div className="flex gap-2">
           <button type="submit" disabled={isSaving || !isDirty} className="btn-primary disabled:opacity-50">

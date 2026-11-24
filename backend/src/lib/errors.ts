@@ -29,7 +29,29 @@ export const notFoundHandler: RequestHandler = (_req, res) => {
   res.status(404).json({ error: { code: 'NOT_FOUND', message: 'Route not found' } });
 };
 
-export const errorHandler: ErrorRequestHandler = (err, _req, res, _next) => {
+const transientPrismaCodes = new Set(['P1001', 'P1002', 'P1008', 'P1017', 'P2024', 'P2028']);
+const transientPostgresCodes = new Set(['55P03', '57014']);
+
+function isTransientDatabaseError(error: unknown): boolean {
+  if (!(error instanceof Error)) return false;
+  const { code, errorCode, meta } = error as Error & {
+    code?: string;
+    errorCode?: string;
+    meta?: { code?: string };
+  };
+  return transientPrismaCodes.has(code ?? errorCode ?? '') ||
+    transientPostgresCodes.has(code ?? '') ||
+    (code === 'P2010' && transientPostgresCodes.has(meta?.code ?? '')) ||
+    /\b(?:lock timeout|statement timeout|query read timeout|timeout exceeded when trying to connect|connection terminated due to connection timeout)\b/i.test(error.message);
+}
+
+export const errorHandler: ErrorRequestHandler = (err, _req, res, next) => {
+  if (res.headersSent) {
+    next(err);
+    return;
+  }
+  // Static-file middleware can set the file's MIME type before raising an error.
+  res.type('json');
   if (err instanceof HttpError) {
     res.status(err.status).json({ error: { code: err.code, message: err.message } });
     return;
@@ -51,9 +73,16 @@ export const errorHandler: ErrorRequestHandler = (err, _req, res, _next) => {
     res.status(413).json({ error: { code: 'PAYLOAD_TOO_LARGE', message: 'Request body is too large' } });
     return;
   }
-  // Any other client error raised by the body parser (unsupported charset/encoding, ...)
-  if (err?.expose === true && Number.isInteger(err.status) && err.status >= 400 && err.status < 500) {
+  // Express's route decoder sets a status on URIError without setting expose.
+  const invalidRoute = err instanceof URIError && 'status' in err && err.status === 400;
+  const exposedClientError =
+    err?.expose === true && Number.isInteger(err.status) && err.status >= 400 && err.status < 500;
+  if (invalidRoute || exposedClientError) {
     res.status(err.status).json({ error: { code: 'BAD_REQUEST', message: 'Malformed request' } });
+    return;
+  }
+  if (isTransientDatabaseError(err)) {
+    res.status(503).json({ error: { code: 'DB_UNAVAILABLE', message: 'Database temporarily unavailable. Please try again.' } });
     return;
   }
   console.error(err);

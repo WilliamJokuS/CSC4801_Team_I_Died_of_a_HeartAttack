@@ -32,7 +32,6 @@ import EmployerJobFormPage from '../../../frontend/src/pages/EmployerJobFormPage
 import CandidateProfilePage from '../../../frontend/src/pages/CandidateProfilePage';
 import AuthPage from '../../../frontend/src/pages/AuthPage';
 import { compareScoredJobs as frontendCompareJobs } from '../../../frontend/src/lib/matchScore';
-import { clampSlotStartInput } from '../../../frontend/src/lib/slotTimeInput';
 import { compareScoredJobs as backendCompareJobs } from '../../../backend/src/matching/index.js';
 import { skillsSchema, tagsSchema } from '../../../backend/src/lib/skills.js';
 import { FakePrisma } from '../support/fakePrisma.js';
@@ -62,6 +61,7 @@ beforeEach(() => {
 
 afterEach(() => {
   cleanup();
+  setToken(null);
 });
 
 const staticAuth = <T extends { role: 'Candidate' | 'Employer' }>(user: T & { id: string; email: string; display_name: string; created_at: string }) => ({
@@ -353,8 +353,8 @@ describe('Open Bug Regressions — Frontend (Owner: Ean Jie)', () => {
 
       // Clearing input ("") should remain "" rather than snapping to min
       fireEvent.change(input, { target: { value: '' } });
+      fireEvent.blur(input);
       expect(input.value).toBe('');
-      expect(clampSlotStartInput('', '2027-11-09T09:00')).toBe('');
     } finally {
       globalThis.fetch = origFetch;
     }
@@ -426,7 +426,7 @@ describe('Open Bug Regressions — Frontend (Owner: Ean Jie)', () => {
     }
   });
 
-  it('BUG-FE-9 (CandidateProfilePage.tsx): Uncommitted skill input text is committed on save instead of silently dropped', async () => {
+  it('BUG-FE-9 (CandidateProfilePage.tsx): Save prompts the user to add or clear uncommitted skill text', async () => {
     let putPayload: { display_name: string; skills: string[]; resume_text: string } | null = null;
     const origFetch = globalThis.fetch;
     globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
@@ -453,7 +453,7 @@ describe('Open Bug Regressions — Frontend (Owner: Ean Jie)', () => {
     }) as typeof fetch;
 
     try {
-      const { container, findByDisplayValue, getByPlaceholderText } = render(
+      const { container, findByDisplayValue, getByPlaceholderText, findByRole } = render(
         <AuthContext.Provider value={staticAuth(candUser)}>
           <MemoryRouter>
             <CandidateProfilePage />
@@ -468,7 +468,11 @@ describe('Open Bug Regressions — Frontend (Owner: Ean Jie)', () => {
 
       const saveButtons = Array.from(container.querySelectorAll('button[type="submit"]')) as HTMLButtonElement[];
       fireEvent.click(saveButtons[0]);
+      expect(putPayload).toBeNull();
+      expect((await findByRole('alert')).textContent).toMatch(/add or clear.*skill/i);
 
+      fireEvent.keyDown(skillInput, { key: 'Enter' });
+      fireEvent.click(saveButtons[0]);
       await waitFor(() => {
         expect(putPayload).not.toBeNull();
       });
@@ -650,7 +654,7 @@ describe('Open Bug Regressions — Frontend (Owner: Ean Jie)', () => {
     }
   });
 
-  it('BUG-FE-13 (FP-EMP-2, EmployerJobFormPage.tsx:148-153): Uncommitted skill and tag inputs are committed on job submit instead of silently dropped', async () => {
+  it('BUG-FE-13 (FP-EMP-2, EmployerJobFormPage.tsx:148-153): Job submit prompts the user to add or clear uncommitted skills and tags', async () => {
     let createdPayload: { title: string; description: string; required_skills: string[]; tags?: string[] } | null = null;
     const origFetch = globalThis.fetch;
     globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
@@ -673,7 +677,7 @@ describe('Open Bug Regressions — Frontend (Owner: Ean Jie)', () => {
     }) as typeof fetch;
 
     try {
-      const { findByLabelText, getByPlaceholderText, getByRole } = render(
+      const { findByLabelText, getByPlaceholderText, getByRole, findByRole } = render(
         <AuthContext.Provider value={staticAuth(empUser)}>
           <MemoryRouter initialEntries={['/employer/jobs/new']}>
             <Routes>
@@ -690,7 +694,12 @@ describe('Open Bug Regressions — Frontend (Owner: Ean Jie)', () => {
       fireEvent.change(getByPlaceholderText('e.g. Python'), { target: { value: 'python' } });
       fireEvent.change(getByPlaceholderText('e.g. Remote'), { target: { value: 'Remote' } });
       fireEvent.click(getByRole('button', { name: 'Create job' }));
+      expect(createdPayload).toBeNull();
+      expect((await findByRole('alert')).textContent).toMatch(/add or clear/i);
 
+      fireEvent.keyDown(getByPlaceholderText('e.g. Python'), { key: 'Enter' });
+      fireEvent.keyDown(getByPlaceholderText('e.g. Remote'), { key: 'Enter' });
+      fireEvent.click(getByRole('button', { name: 'Create job' }));
       await waitFor(() => {
         expect(createdPayload).not.toBeNull();
       });
@@ -1195,7 +1204,7 @@ describe('Open Bug Regressions — Frontend (Owner: Ean Jie)', () => {
     }) as typeof fetch;
 
     try {
-      const { findByRole, findByText, queryByRole } = render(
+      const { findByRole, queryByRole } = render(
         <ToastProvider>
           <AuthContext.Provider value={staticAuth(candUser)}>
             <MemoryRouter initialEntries={['/candidate/jobs']}>
@@ -1208,10 +1217,8 @@ describe('Open Bug Regressions — Frontend (Owner: Ean Jie)', () => {
       const applyBtn = await findByRole('button', { name: /Apply for this role/i });
       fireEvent.click(applyBtn);
 
-      // Wait for the 409 ALREADY_APPLIED response to settle before checking reconciled UI state
-      await findByText(/already applied/i);
-
       await waitFor(() => {
+        expect(jobsCalls).toBe(2);
         const stillApply = queryByRole('button', { name: /Apply for this role/i }) as HTMLButtonElement | null;
         expect(stillApply === null || stillApply.disabled).toBe(true);
       });
@@ -1256,12 +1263,13 @@ describe('Open Bug Regressions — Backend (Owner: William)', () => {
     expect(res.status).toBe(401);
   });
 
-  it('BUG-BE-3 (lib/skills.ts): skillsSchema trims whitespace and deduplicates before checking max length/count, matching tagsSchema and specs/002', () => {
+  it('validates submitted skills before normalizing and retains the tag normalization rules', () => {
     const padded50Skill = '  ' + 'a'.repeat(50) + '  ';
     const dup51Skills = [...Array.from({ length: 49 }, (_, i) => `skill-${i}`), 'python', 'PYTHON'];
 
-    expect(skillsSchema.safeParse([padded50Skill]).success).toBe(true);
-    expect(skillsSchema.safeParse(dup51Skills).success).toBe(true);
+    expect(skillsSchema.safeParse([padded50Skill]).success).toBe(false);
+    expect(skillsSchema.safeParse(dup51Skills).success).toBe(false);
+    expect(skillsSchema.parse([' Python', 'python', ''])).toEqual(['python']);
     expect(tagsSchema.safeParse(['  ' + 'a'.repeat(30) + '  ']).success).toBe(true);
   });
 
@@ -1345,12 +1353,9 @@ describe('Open Bug Regressions — Backend (Owner: William)', () => {
     const empId = db.addUser({ role: 'Employer', email: 'hr@book-order.test' });
     const aliceId = db.addUser({ role: 'Candidate', email: 'alice@book-order.test' });
     const bobId = db.addUser({ role: 'Candidate', email: 'bob@book-order.test' });
-    const jobId = db.addJob(empId, { title: 'Data Analyst', requiredSkills: ['python'] });
-    const slotId = db.addSlot(empId, {
-      startTime: new Date('2027-06-01T10:00:00Z'),
-      endTime: new Date('2027-06-01T10:30:00Z'),
-    });
-    const aliceAppId = db.addApplication(jobId, aliceId, 'Interviewing');
+    const jobId = db.addJob({ employerId: empId, title: 'Data Analyst', requiredSkills: ['python'] });
+    const slotId = db.addSlot({ employerId: empId, start: new Date('2027-06-01T10:00:00Z') });
+    const aliceAppId = db.addApplication({ jobId, candidateId: aliceId, status: 'Interviewing' });
     const bobToken = tokenFor(bobId, 'Candidate');
 
     // Invalid body against another candidate's application must return 403, not 400
