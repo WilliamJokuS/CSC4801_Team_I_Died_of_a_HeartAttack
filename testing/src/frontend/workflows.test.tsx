@@ -9,12 +9,13 @@
  * confirmation dialogs.
  */
 import React from 'react';
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, render, waitFor } from '@testing-library/react';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { AuthContext } from '../../../frontend/src/context/auth-context';
 import { ToastProvider } from '../../../frontend/src/context/ToastContext';
 import CandidateBookInterviewPage from '../../../frontend/src/pages/CandidateBookInterviewPage';
+import CandidateOverviewPage from '../../../frontend/src/pages/CandidateOverviewPage';
 import CandidateJobsView from '../../../frontend/src/pages/CandidateJobsView';
 import EmployerDashboardPage from '../../../frontend/src/pages/EmployerDashboardPage';
 import EmployerApplicantsPage from '../../../frontend/src/pages/EmployerApplicantsPage';
@@ -64,6 +65,7 @@ const empUser = {
 describe('Frontend UI workflows (FP-CAN-2, FP-CAN-3, FP-EMP-2, FP-EMP-3, FP-SCHED-2, FP-SCHED-3)', () => {
   it('FP-SCHED-3 UI: CandidateBookInterviewPage reloads remaining slots after a 409 SLOT_TAKEN race', async () => {
     let availableSlotsCalls = 0;
+    let bookingCalls = 0;
     const origFetch = globalThis.fetch;
     globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
       const url = String(input);
@@ -122,6 +124,7 @@ describe('Frontend UI workflows (FP-CAN-2, FP-CAN-3, FP-EMP-2, FP-EMP-3, FP-SCHE
         });
       }
       if (url.endsWith('/api/applications/app-race/book') && init?.method === 'POST') {
+        bookingCalls += 1;
         return new Response(
           JSON.stringify({
             error: { code: 'SLOT_TAKEN', message: 'Slot already booked' },
@@ -133,7 +136,7 @@ describe('Frontend UI workflows (FP-CAN-2, FP-CAN-3, FP-EMP-2, FP-EMP-3, FP-SCHE
     }) as typeof fetch;
 
     try {
-      const { container, findByRole } = render(
+      const { container, findByRole, getByText } = render(
         <AuthContext.Provider
           value={{
             user: candUser,
@@ -167,8 +170,59 @@ describe('Frontend UI workflows (FP-CAN-2, FP-CAN-3, FP-EMP-2, FP-EMP-3, FP-SCHE
       const remainingRadios = Array.from(container.querySelectorAll('input[type="radio"]')) as HTMLInputElement[];
       expect(remainingRadios.length).toBe(1);
       expect(remainingRadios[0].value).toBe('slot-2');
+      expect(remainingRadios[0].checked).toBe(false);
+      const retryConfirm = await findByRole<HTMLButtonElement>('button', { name: /Confirm booking/i });
+      expect(retryConfirm.disabled).toBe(true);
+      expect(getByText(/Someone just booked that slot/i)).toBeTruthy();
+      fireEvent.click(retryConfirm);
+      expect(bookingCalls).toBe(1);
+      fireEvent.click(remainingRadios[0]);
+      expect(retryConfirm.disabled).toBe(false);
     } finally {
       globalThis.fetch = origFetch;
+    }
+  });
+
+  it('opens the selected recommendation and lists all ranked jobs with required skills', async () => {
+    const jobs = ['First', 'Second', 'Third', 'Fourth'].map((title, index) => ({
+      id: `job-${index}`, employer_id: 'emp-1', company_name: 'Acme', company_description: '',
+      title: `${title} role`, description: `${title} role description`, tags: [],
+      required_skills: [`${title.toLowerCase()}-skill`], match_score: 100 - index,
+      created_at: '2026-01-01T00:00:00Z', has_applied: false,
+    }));
+    vi.stubGlobal('fetch', vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url.endsWith('/jobs')) return Response.json(jobs);
+      if (url.endsWith('/applications/mine')) return Response.json([]);
+      if (url.endsWith('/candidates/me/profile')) return Response.json({ display_name: 'Alice Tan', skills: [] });
+      throw new Error(`Unexpected fetch: ${url}`);
+    }));
+    const view = render(
+      <ToastProvider>
+        <AuthContext.Provider value={{
+          user: candUser, isLoading: false, login: async () => {}, register: async () => {},
+          logout: async () => {}, previewAs: () => {},
+        }}>
+          <MemoryRouter initialEntries={['/candidate']}>
+            <Routes>
+              <Route path="/candidate" element={<CandidateOverviewPage />} />
+              <Route path="/candidate/jobs" element={<CandidateJobsView />} />
+            </Routes>
+          </MemoryRouter>
+        </AuthContext.Provider>
+      </ToastProvider>,
+    );
+    try {
+      const recommendations = await view.findAllByRole('link', { name: 'View', exact: true });
+      const titles = view.queryAllByText(/^(First|Second|Third|Fourth) role$/).map((node) => node.textContent);
+      const hasRequiredSkills = Boolean(view.queryByText('fourth-skill', { exact: false }));
+      fireEvent.click(recommendations[1]);
+      await view.findByText('Second role description');
+      expect(view.queryByText('First role description')).toBeNull();
+      expect(titles).toEqual(jobs.map((job) => job.title));
+      expect(hasRequiredSkills).toBe(true);
+    } finally {
+      vi.unstubAllGlobals();
     }
   });
 
@@ -460,6 +514,63 @@ describe('Frontend UI workflows (FP-CAN-2, FP-CAN-3, FP-EMP-2, FP-EMP-3, FP-SCHE
       });
     } finally {
       globalThis.fetch = origFetch;
+    }
+  });
+
+  it('locks each applicant independently and displays the status returned by the server', async () => {
+    const job = { id: 'job-1', title: 'Engineer', company_name: 'Acme', required_skills: [] };
+    const applicants = ['Alice', 'Bob'].map((name, index) => ({
+      id: `app-${index}`, job_id: job.id, candidate_id: `candidate-${index}`, status: 'Pending',
+      created_at: '2026-01-01T00:00:00Z', interview_slot_id: null, match_score: 100, job,
+      candidate: { id: `candidate-${index}`, display_name: name, skills: [] }, interview_slot: null,
+    }));
+    let finishAlice!: (response: Response) => void;
+    const firstUpdate = new Promise<Response>((resolve) => { finishAlice = resolve; });
+    const writes: string[] = [];
+    const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url.endsWith('/jobs/job-1')) return Response.json(job);
+      if (url.endsWith('/applicants')) return Response.json(applicants);
+      writes.push(url);
+      if (url.endsWith('/app-0/status')) return firstUpdate;
+      if (url.endsWith('/app-1/status')) return Response.json({ ...applicants[1], status: 'Accepted' });
+      throw new Error(`Unexpected fetch: ${url}`);
+    });
+    vi.stubGlobal('fetch', fetchMock);
+    const { findAllByLabelText } = render(
+      <ToastProvider>
+        <AuthContext.Provider value={{
+          user: empUser, isLoading: false, login: async () => {}, register: async () => {},
+          logout: async () => {}, previewAs: () => {},
+        }}>
+          <MemoryRouter initialEntries={['/employer/jobs/job-1/applicants']}>
+            <Routes>
+              <Route path="/employer/jobs/:jobId/applicants" element={<EmployerApplicantsPage />} />
+            </Routes>
+          </MemoryRouter>
+        </AuthContext.Provider>
+      </ToastProvider>,
+    );
+    try {
+      const [alice, bob] = await findAllByLabelText<HTMLSelectElement>('Update status');
+      fireEvent.change(alice, { target: { value: 'Interviewing' } });
+      expect(alice.disabled).toBe(true);
+      expect(bob.disabled).toBe(false);
+      fireEvent.change(bob, { target: { value: 'Interviewing' } });
+      expect(alice.disabled).toBe(true);
+
+      // A synthetic change also exercises the handler's in-flight guard.
+      fireEvent.change(alice, { target: { value: 'Accepted' } });
+      await waitFor(() => expect(bob.value).toBe('Accepted'));
+      expect(alice.disabled).toBe(true);
+      expect(writes).toEqual(['/api/applications/app-0/status', '/api/applications/app-1/status']);
+
+      finishAlice(Response.json({ ...applicants[0], status: 'Interviewing' }));
+      await waitFor(() => expect(alice.value).toBe('Interviewing'));
+      expect(alice.disabled).toBe(false);
+      expect(bob.value).toBe('Accepted');
+    } finally {
+      vi.unstubAllGlobals();
     }
   });
 

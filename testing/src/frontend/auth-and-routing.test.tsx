@@ -196,7 +196,7 @@ describe('FP-AUTH-1 / FP-AUTH-2 / FP-AUTH-3: AuthProvider, AuthPage, ProtectedRo
     fireEvent.change(screen.getByLabelText(/Email address/i), { target: { value: 'bob@demo.test' } });
     fireEvent.change(screen.getByLabelText(/^Password$/i), { target: { value: 'short' } });
     fireEvent.click(submit);
-    expect(await screen.findByText(/at least 8 characters/i)).toBeTruthy();
+    expect(await screen.findByText(/8–72 UTF-8 bytes/i)).toBeTruthy();
 
     // Mismatched confirm password
     fireEvent.change(screen.getByLabelText(/^Password$/i), { target: { value: 'password123' } });

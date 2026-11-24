@@ -32,7 +32,7 @@ The concurrency regression suite runs separately from `npm test` against a real,
    docker compose -f backend/docker-compose.dev.yml up -d
    ```
 
-2. Run the live suite from `testing/` (optionally override `TEST_DATABASE_URL`; defaults to `postgres://app:app@127.0.0.1:5432/recruiting_test` and refuses to run against the main `recruiting` database). Prisma migrations are applied automatically before the suite runs:
+2. Set `TEST_DATABASE_URL` to a disposable database and run the live suite from `testing/`. The role must be able to create temporary test databases. Prisma migrations are applied automatically.
 
    ```bash
    cd testing
@@ -65,5 +65,7 @@ The concurrency regression suite runs separately from `npm test` against a real,
 | `src/frontend/pages-coverage.test.tsx` | `FP-CAN-1`, `FP-CAN-2`, `FP-CAN-3`, `FP-EMP-1`, `FP-EMP-2`, `FP-EMP-3`, `FP-SCHED-1`, `FP-SCHED-2` | Full page workflow tests for `CandidateProfilePage`, `CandidateJobsView`, `CandidateApplicationsPage`, `CandidateBookInterviewPage`, `CandidateOverviewPage`, `EmployerProfilePage`, `EmployerJobFormPage` (create/edit/full PUT tags/ownership guard), `EmployerDashboardPage` (`409 JOB_HAS_DEPENDENTS`), `EmployerApplicantsPage`, and `EmployerAvailabilityPage` (create, `409 SLOT_OVERLAP`, booked delete guard, delete) |
 | `src/unit/static-checks.test.ts` | `FP-MATCH-1`, `FP-AUTH-2`, `FP-SEC-2`, `FP-SEC-3`, `FP-SEC-4` | Verifies single `matchScore` implementation, no unsafe raw SQL or HTML injection (`dangerouslySetInnerHTML`), no HTML-escaping on write, `.env.example` placeholder hygiene, and `JWT_SECRET` length enforcement |
 | `src/unit/seed.test.ts` | `FP-ARCH-1`, `FP-DOC-3` | Verifies deterministic `seed.sql` / `reset.sql` (demo accounts, valid `password123` bcrypt hashes, 4 match examples, all 4 application statuses, 2 `Interviewing` candidates racing for a slot) and `/api/health` (`200` vs `503`) |
-| `src/regression/open-bugs.test.tsx` | `FP-ARCH-1`, `FP-AUTH-1`, `FP-AUTH-2`, `FP-AUTH-3`, `FP-CAN-1`, `FP-CAN-2`, `FP-CAN-3`, `FP-EMP-2`, `FP-EMP-3`, `FP-MATCH-1`, `FP-SCHED-1`, `FP-SCHED-2`, `FP-SCHED-3`, `FP-SEC-1`, `FP-SUB-1` | Regression tests (`npm run test:bugs`) for bugs reported to `frontend/` (16 fixed/passing: `BUG-FE-1`, `BUG-FE-2`, `BUG-FE-4`..`BUG-FE-17`; 4 open: `BUG-FE-18a`..`BUG-FE-18d`), `backend/` (6 fixed/passing: `BUG-BE-1`..`BUG-BE-6`; 5 open: `BUG-BE-7`..`BUG-BE-11`), and shared submission gates (2 open: `BUG-SH-1`, `BUG-SH-2`); each test asserts the expected fixed behavior and turns green once its owner lands the fix |
+| `src/regression/open-bugs.test.tsx` | Audit regressions | Frontend, backend, and repository checks from the audit |
 | `src/live-pg/concurrency.live.test.ts` | `FP-SCHED-1`, `FP-SCHED-2`, `FP-EMP-2` | Live PostgreSQL concurrency regression suite (`npm run test:live`, commit `db6a0f1`): booking lock-wait past start time (`409 SLOT_IN_PAST`), blocked slot creation past start time (`400 VALIDATION_ERROR`), concurrent vs sequential overlapping slot inserts (`201` / `409 SLOT_OVERLAP`), simultaneous job edits serialization, and simultaneous job deletes locked recheck (`204` / `404 NOT_FOUND`) |
+| `src/live-pg/database-deadlines.live.test.ts` | `FP-ARCH-1`, `FP-SCHED-3` | Bounded health, booking, and deletion responses during connection and lock stalls |
+| `src/live-pg/seed-and-migrations.test.ts` | `FP-DOC-3`, `FP-SCHED-3` | Atomic reseeding, legacy overlap cleanup, and the seeded booking race |
