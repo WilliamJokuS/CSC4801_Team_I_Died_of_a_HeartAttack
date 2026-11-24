@@ -4,7 +4,7 @@ Written by William (backend) for Ean Jie (frontend) and their agent. Everything 
 
 ## 1. Status
 
-All 25 routes in [`Contract/API_Contract.md`](../Contract/API_Contract.md) are implemented and tested ([`Contract/API_Status.md`](../Contract/API_Status.md)). Response shapes are defined in:
+All 24 routes in [`Contract/API_Contract.md`](../Contract/API_Contract.md) are implemented and tested ([`Contract/API_Status.md`](../Contract/API_Status.md)). Response shapes are defined in:
 
 | Spec | Defines |
 |---|---|
@@ -87,6 +87,7 @@ Then pages call e.g. `await jobsApi.listScored()` and catch `ApiError`. The refe
 | `ALREADY_APPLIED` | 409 | "You've already applied to this job." |
 | `JOB_HAS_DEPENDENTS` | 409 | "This job has applicants, so it can't be deleted." |
 | `SLOT_BOOKED` | 409 | "This slot is booked, so it can't be deleted." |
+| `SLOT_OVERLAP` | 409 | "You already have a slot that overlaps this time." |
 | `NOT_INTERVIEWING` | 409 | "You can book an interview once the employer moves you to Interviewing." |
 | `ALREADY_BOOKED` | 409 | "You've already booked an interview for this application." |
 | `SLOT_TAKEN` | 409 | "Someone just booked that slot. Please pick another." |

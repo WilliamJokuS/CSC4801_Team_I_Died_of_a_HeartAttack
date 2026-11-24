@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import type { PrismaClient } from '../generated/prisma/client.js';
 import { Prisma } from '../generated/prisma/client.js';
-import { HttpError, badRequest, conflict, forbidden, notFound } from '../lib/errors.js';
+import { type HttpError, badRequest, conflict, forbidden, notFound } from '../lib/errors.js';
 import { toApplication, type Application } from '../applications/service.js';
 
 export interface SchedulingDeps {
@@ -33,8 +33,10 @@ export const SLOT_MINUTES = 30;
 const SLOT_MS = SLOT_MINUTES * 60_000;
 
 // Timestamps must carry Z or an explicit offset, so the instant is unambiguous (FP-SCHED-1).
-// Stored as timestamptz and always returned in UTC.
-const instant = z.iso.datetime({ offset: true, message: 'must be an ISO 8601 timestamp with Z or an offset' });
+// The Date conversion preserves only milliseconds. Extra fractional zeroes are lossless.
+const instant = z.iso
+  .datetime({ offset: true, message: 'must be an ISO 8601 timestamp with Z or an offset' })
+  .refine((value) => !/\.\d{3}\d*[1-9]/.test(value), 'must be representable with millisecond precision');
 
 export const slotInputSchema = z.object({ start_time: instant, end_time: instant });
 export const bookInputSchema = z.object({ slot_id: z.uuid({ message: 'must be a UUID' }) });
@@ -101,8 +103,7 @@ export async function createSlot(deps: SchedulingDeps, employerId: string, input
   const end = new Date(data.end_time);
   const problem = validateSlotTimes(start, end, clock(deps));
   if (problem) throw badRequest(problem);
-  // The availability_slots_no_overlap exclusion constraint is the real guard (race-safe); this
-  // check just gives the common case a clear error without relying on the driver's error shape.
+  // The exclusion constraint also checks for overlaps that appear after this read.
   const [earliest] = await deps.prisma.availabilitySlot.findMany({
     where: { employerId, endTime: { gt: start } },
     orderBy: { startTime: 'asc' },
@@ -110,10 +111,11 @@ export async function createSlot(deps: SchedulingDeps, employerId: string, input
     take: 1,
   });
   if (earliest && earliest.startTime < end) throw slotOverlap();
+
   try {
     return await deps.prisma.$transaction(async (tx) => {
       const slot = await tx.availabilitySlot.create({ data: { employerId, startTime: start, endTime: end } });
-      // The exclusion constraint can block the insert until the slot has already started.
+      // Waiting for another insert or delete can take until after the slot starts.
       if (start <= clock(deps)) throw badRequest('start_time must be in the future');
       return toSlot(slot);
     });
@@ -138,9 +140,16 @@ function isExclusionViolation(err: unknown): boolean {
 export async function deleteSlot(deps: SchedulingDeps, employerId: string, slotId: string): Promise<void> {
   await deps.prisma.$transaction(async (tx) => {
     const rows = await tx.$queryRaw<{ employer_id: string; is_booked: boolean }[]>`
-      SELECT employer_id, is_booked FROM availability_slots WHERE id = ${slotId}::uuid FOR UPDATE`;
+      SELECT employer_id, is_booked FROM availability_slots
+      WHERE id = ${slotId}::uuid AND employer_id = ${employerId}::uuid
+      FOR UPDATE
+    `;
     const slot = rows[0];
-    if (!slot) throw notFound('Slot not found');
+    if (!slot) {
+      const current = await tx.availabilitySlot.findUnique({ where: { id: slotId }, select: { employerId: true } });
+      if (current && current.employerId !== employerId) throw forbidden('You do not own this slot');
+      throw notFound('Slot not found');
+    }
     if (slot.employer_id !== employerId) throw forbidden('You do not own this slot');
     const linked = await tx.application.count({ where: { interviewSlotId: slotId } });
     if (slot.is_booked || linked > 0) throw conflict('Slot is booked and cannot be deleted', 'SLOT_BOOKED');
@@ -222,17 +231,27 @@ export async function bookSlot(
   applicationId: string,
   input: unknown,
 ): Promise<Application> {
+  await loadOwnedApplication(deps.prisma, candidateId, applicationId);
   const { slot_id: slotId } = bookInputSchema.parse(input);
 
   try {
     return await deps.prisma.$transaction(async (tx) => {
-      await tx.$queryRaw`SELECT id FROM applications WHERE id = ${applicationId}::uuid FOR UPDATE`;
+      await tx.$queryRaw`
+        SELECT id FROM applications
+        WHERE id = ${applicationId}::uuid AND candidate_id = ${candidateId}::uuid
+        FOR UPDATE
+      `;
       const app = await loadOwnedApplication(tx, candidateId, applicationId);
 
       // Lock the slot too (always application first, then slot, so two bookings can't deadlock).
       // Racing bookers and a concurrent deleteSlot wait here, then read the committed state, so
       // each gets the accurate error: SLOT_TAKEN if it was booked, 404 if it was deleted.
-      await tx.$queryRaw`SELECT id FROM availability_slots WHERE id = ${slotId}::uuid FOR UPDATE`;
+      const lockedSlots = await tx.$queryRaw<{ id: string }[]>`
+        SELECT id FROM availability_slots
+        WHERE id = ${slotId}::uuid AND employer_id = ${app.job.employerId}::uuid
+        FOR UPDATE
+      `;
+      if (lockedSlots.length === 0) throw notFound('Slot not found');
       const slot = await tx.availabilitySlot.findUnique({
         where: { id: slotId },
         include: { application: { select: { id: true } } },

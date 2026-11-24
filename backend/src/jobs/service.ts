@@ -2,6 +2,7 @@ import { z } from 'zod';
 import type { PrismaClient } from '../generated/prisma/client.js';
 import { conflict, forbidden, notFound } from '../lib/errors.js';
 import { skillsFromJson, skillsSchema, tagsSchema } from '../lib/skills.js';
+import { persistedText } from '../lib/validation.js';
 
 export interface JobDeps {
   prisma: PrismaClient;
@@ -26,8 +27,8 @@ export interface EmployerJob extends Job {
 
 // POST and PUT both take the full object (Contract "Resolved decisions" #2).
 export const jobInputSchema = z.object({
-  title: z.string().trim().min(1, 'must not be empty').max(200),
-  description: z.string().trim().min(1, 'must not be empty').max(10_000),
+  title: persistedText.trim().min(1, 'must not be empty').max(200),
+  description: persistedText.trim().min(1, 'must not be empty').max(10_000),
   required_skills: skillsSchema, // may be empty (FP-EMP-2)
   // Optional; PUT is still a full replacement, so omitting it clears the tags (specs/004).
   tags: tagsSchema,

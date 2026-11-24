@@ -2,6 +2,7 @@ import { z } from 'zod';
 import type { PrismaClient } from '../generated/prisma/client.js';
 import { notFound } from '../lib/errors.js';
 import { skillsFromJson, skillsSchema } from '../lib/skills.js';
+import { persistedText } from '../lib/validation.js';
 
 export interface ProfileDeps {
   prisma: PrismaClient;
@@ -22,14 +23,14 @@ export interface CompanyProfile {
 
 // PUT replaces the whole profile, so every field is required.
 export const candidateProfileSchema = z.object({
-  display_name: z.string().trim().min(1, 'must not be empty').max(100),
+  display_name: persistedText.trim().min(1, 'must not be empty').max(100),
   skills: skillsSchema,
-  resume_text: z.string().max(20_000, 'must be at most 20000 characters'),
+  resume_text: persistedText.max(20_000, 'must be at most 20000 characters'),
 });
 
 export const companyProfileSchema = z.object({
-  company_name: z.string().trim().min(1, 'must not be empty').max(200),
-  description: z.string().max(5_000, 'must be at most 5000 characters'),
+  company_name: persistedText.trim().min(1, 'must not be empty').max(200),
+  description: persistedText.max(5_000, 'must be at most 5000 characters'),
 });
 
 /*

@@ -2,6 +2,7 @@ import { z } from 'zod';
 import type { PrismaClient } from '../generated/prisma/client.js';
 import { Prisma } from '../generated/prisma/client.js';
 import { conflict, unauthorized } from '../lib/errors.js';
+import { persistedText } from '../lib/validation.js';
 import { DUMMY_HASH, hashPassword, isBcryptCompatiblePassword, verifyPassword } from './password.js';
 import { signToken } from './jwt.js';
 
@@ -25,24 +26,22 @@ export interface AuthDeps {
   jwtExpiresIn: string;
 }
 
-const email = z
-  .string()
-  .trim()
-  .toLowerCase()
-  .pipe(z.email({ message: 'must be a valid email address' }));
+const normalizedEmail = persistedText.trim().toLowerCase();
+const emailAddress = z.email({ message: 'must be a valid email address' });
 
 export const registerSchema = z.object({
-  email,
+  email: normalizedEmail.max(254, 'must be at most 254 characters').pipe(emailAddress),
   password: z
     .string()
-    .min(8, 'must be at least 8 characters')
+    .refine((password) => Buffer.byteLength(password, 'utf8') >= 8, 'must be at least 8 bytes')
     .refine(isBcryptCompatiblePassword, 'must be at most 72 bytes and contain no NUL characters'),
-  display_name: z.string().trim().min(1, 'must not be empty').max(100),
+  display_name: persistedText.trim().min(1, 'must not be empty').max(100),
   role: z.enum(['Candidate', 'Employer']),
 });
 
 export const loginSchema = z.object({
-  email,
+  // Existing accounts may have been registered before the length limit was added.
+  email: normalizedEmail.pipe(emailAddress),
   password: z.string().min(1, 'must not be empty'),
 });
 

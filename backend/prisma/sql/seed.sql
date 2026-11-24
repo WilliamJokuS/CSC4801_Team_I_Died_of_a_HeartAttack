@@ -4,11 +4,11 @@
 -- LOCAL / DEMO CREDENTIALS ONLY. Every account's password is `password123`; the hash below is
 -- bcrypt cost 12, the same scheme src/auth/password.ts uses, so these accounts log in normally.
 --
--- Fixed UUIDs and timestamps keep every run identical. ID prefixes for readability:
+-- Fixed UUIDs and most timestamps keep the demo reproducible. ID prefixes for readability:
 --   1111… candidates   2222… employers   3333… jobs   4444… slots   5555… applications
 -- Skills are stored already normalized (trimmed, lowercase, deduped), as the API stores them.
 -- Job tags (specs/004) keep their casing and never affect the match score.
--- Interview slots are in January 2027 (UTC) so they stay in the future for the course.
+-- Interview slots are relative to the seed reference date (UTC), which defaults to today.
 --
 -- FP-DOC-3 / FP-MATCH-1 coverage, all against job "Data Analyst" (required: python, sql):
 --   Alice Tan  [python, sql] -> 100     Bob Lim [python] -> 50     Chen Wei [rust] -> 0
@@ -16,8 +16,6 @@
 -- Applications cover Pending, Interviewing, Rejected, Accepted. Alice and Bob are both
 -- Interviewing for Acme's "Data Analyst" and neither is booked, so they can race for Acme's
 -- open slots (FP-SCHED-3). Ethan's application shows an existing booking.
-
-BEGIN;
 
 -- ---------------------------------------------------------------- users
 INSERT INTO users (id, email, password_hash, role, display_name, created_at) VALUES
@@ -78,15 +76,21 @@ INSERT INTO jobs (id, employer_id, title, description, required_skills, tags, is
   ('33333333-0000-4000-8000-000000000015', '22222222-0000-4000-8000-000000000003', 'Java Developer',      'Spring services for internal tooling.',                     '["java", "spring", "sql"]', '["Internship", "On-site"]',                       true, '2026-09-04T05:00:00Z');
 
 -- ---------------------------------------------------------------- availability slots (30 min, UTC)
+WITH seed_anchor AS (
+  SELECT COALESCE(
+    NULLIF(current_setting('csc4801.seed_reference_date', true), '')::date,
+    (CURRENT_TIMESTAMP AT TIME ZONE 'UTC')::date
+  )::timestamp AT TIME ZONE 'UTC' AS midnight
+)
 INSERT INTO availability_slots (id, employer_id, start_time, end_time, is_booked) VALUES
   -- Acme: open slots Alice and Bob can both try to book
-  ('44444444-0000-4000-8000-000000000001', '22222222-0000-4000-8000-000000000001', '2027-01-11T02:00:00Z', '2027-01-11T02:30:00Z', false),
-  ('44444444-0000-4000-8000-000000000002', '22222222-0000-4000-8000-000000000001', '2027-01-11T02:30:00Z', '2027-01-11T03:00:00Z', false),
+  ('44444444-0000-4000-8000-000000000001', '22222222-0000-4000-8000-000000000001', (SELECT midnight FROM seed_anchor) + interval '26 hours', (SELECT midnight FROM seed_anchor) + interval '26 hours 30 minutes', false),
+  ('44444444-0000-4000-8000-000000000002', '22222222-0000-4000-8000-000000000001', (SELECT midnight FROM seed_anchor) + interval '26 hours 30 minutes', (SELECT midnight FROM seed_anchor) + interval '27 hours', false),
   -- Northwind: one booked (by Ethan below), one open
-  ('44444444-0000-4000-8000-000000000003', '22222222-0000-4000-8000-000000000002', '2027-01-12T06:00:00Z', '2027-01-12T06:30:00Z', true),
-  ('44444444-0000-4000-8000-000000000004', '22222222-0000-4000-8000-000000000002', '2027-01-12T06:30:00Z', '2027-01-12T07:00:00Z', false),
+  ('44444444-0000-4000-8000-000000000003', '22222222-0000-4000-8000-000000000002', (SELECT midnight FROM seed_anchor) + interval '54 hours', (SELECT midnight FROM seed_anchor) + interval '54 hours 30 minutes', true),
+  ('44444444-0000-4000-8000-000000000004', '22222222-0000-4000-8000-000000000002', (SELECT midnight FROM seed_anchor) + interval '54 hours 30 minutes', (SELECT midnight FROM seed_anchor) + interval '55 hours', false),
   -- Harbor: open
-  ('44444444-0000-4000-8000-000000000005', '22222222-0000-4000-8000-000000000003', '2027-01-13T01:00:00Z', '2027-01-13T01:30:00Z', false);
+  ('44444444-0000-4000-8000-000000000005', '22222222-0000-4000-8000-000000000003', (SELECT midnight FROM seed_anchor) + interval '73 hours', (SELECT midnight FROM seed_anchor) + interval '73 hours 30 minutes', false);
 
 -- ---------------------------------------------------------------- applications
 INSERT INTO applications (id, job_id, candidate_id, status, created_at, interview_slot_id) VALUES
@@ -103,5 +107,3 @@ INSERT INTO applications (id, job_id, candidate_id, status, created_at, intervie
   -- Harbor
   ('55555555-0000-4000-8000-000000000008', '33333333-0000-4000-8000-000000000015', '11111111-0000-4000-8000-000000000006', 'Pending',      '2026-09-05T08:00:00Z', NULL),
   ('55555555-0000-4000-8000-000000000009', '33333333-0000-4000-8000-000000000011', '11111111-0000-4000-8000-000000000009', 'Interviewing', '2026-09-05T09:00:00Z', NULL);
-
-COMMIT;
