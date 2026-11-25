@@ -57,10 +57,12 @@ const clock = (deps: SchedulingDeps) => (deps.now ?? (() => new Date()))();
 
 /**
  * FP-SCHED-1 validation, pure so it can be unit tested: start must be in the future, end must
- * be after start, and the slot must be exactly 30 minutes. The DB CHECK constraint enforces
- * the duration again.
+ * be after start, and the slot must be exactly 30 minutes. Both timestamps must fit within
+ * a four-digit UTC year. The DB CHECK constraint enforces the duration again.
  */
 export function validateSlotTimes(start: Date, end: Date, now: Date): string | null {
+  if (start.getUTCFullYear() > 9999) return 'start_time must be in UTC year 9999 or earlier';
+  if (end.getUTCFullYear() > 9999) return 'end_time must be in UTC year 9999 or earlier';
   if (end.getTime() <= start.getTime()) return 'end_time must be after start_time';
   if (end.getTime() - start.getTime() !== SLOT_MS) return `slot must be exactly ${SLOT_MINUTES} minutes`;
   if (start.getTime() <= now.getTime()) return 'start_time must be in the future';

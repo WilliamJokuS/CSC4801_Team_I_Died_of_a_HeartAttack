@@ -25,7 +25,7 @@ For a local PostgreSQL installation, install the `postgresql-contrib` package if
 | `src/app.ts` | `createApp(deps)` — builds the Express app without listening, so tests can inject a test-DB Prisma client and JWT secret |
 | `src/server.ts` | Entry point: reads config, starts the listener |
 | `src/auth/` | Password hashing, JWT sign/verify, register/login/me service |
-| `src/middleware/auth.ts` | `requireAuth(secret)` → 401, `requireRole(...roles)` → 403 |
+| `src/middleware/auth.ts` | `requireAuth(secret, prisma)` → 401, `requireRole(...roles)` → 403 |
 | `src/lib/errors.ts` | `HttpError` + helpers; renders the `{ error: { code, message } }` envelope |
 | `src/profiles/service.ts` | Candidate and company profiles (always the caller's own, via `/me`) |
 | `src/jobs/service.ts` | Job create/list/get/update/delete, ownership checks, soft delete |
@@ -46,7 +46,7 @@ For a local PostgreSQL installation, install the `postgresql-contrib` package if
 - Login returns the same `401 INVALID_CREDENTIALS` for an unknown email and a wrong password, and runs a bcrypt compare in both cases, so neither the response nor its timing reveals which emails are registered.
 - The running server allows 20 login or registration requests per minute per client address and four in-flight auth requests per server process. Excess requests return `429 AUTH_RATE_LIMITED` or `503 AUTH_BUSY` with `Retry-After`. If a reverse proxy forwards client addresses, set `AUTH_TRUSTED_PROXIES` to a comma-separated list of trusted proxy addresses or CIDRs.
 - Registration creates the matching `candidate_profiles` / `company_profiles` row in the same insert. An employer's `company_name` starts as their `display_name`.
-- Protected routes: `router.get(path, requireAuth(secret), requireRole('Employer'), handler)`. Ownership checks (403 vs 404) belong in each service.
+- Protected routes: `router.get(path, requireAuth(secret, prisma), requireRole('Employer'), handler)`. Ownership checks (403 vs 404) belong in each service.
 
 ### `AuthUser`
 
@@ -99,7 +99,7 @@ Use the contract to write the expected API result and database state before chan
 | FP-EMP-2. Pause the first edit after its write, then start a second edit on the same job. | The first call returned the second edit's values. | The second writer waits for the first transaction. Each edit returns its own values, and the second edit is the stored result. |
 | FP-EMP-2. Let two deletes both read the job as active before either takes the write lock. | Both deletes reported success. | One succeeds and one returns `404 NOT_FOUND`. The job is soft-deleted once. |
 | FP-AUTH-3. Log in, delete the account in the test database, then reuse the token for a profile update. | The profile write reached Prisma and returned a server error. | `401 UNAUTHORIZED`. The write is rejected before reaching the profile service. |
-| FP-CAN-1 / FP-EMP-2. Submit a whitespace-padded 50-character skill and case-insensitive duplicate skills. | Validation counted the raw characters and items. | The validator normalizes first, then applies both limits. The API stores the normalized skills. |
+| FP-CAN-1 / FP-EMP-2. Submit a whitespace-padded 50-character skill or submit more than 50 skills including case-insensitive duplicates. | Normalization could bring the input within both limits. | Validation applies both limits before normalization. The API stores normalized skills for valid submissions. |
 
 The concurrency checks above used standalone reproduction scripts against PostgreSQL 18.6. The existing `BUG-BE` tests cover duplicate slot creation, stale tokens, and skill normalization with a fake database. Use real PostgreSQL to verify lock waits, transaction rollback, and the exclusion constraint.
 
