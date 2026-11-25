@@ -15,7 +15,7 @@ import type { ScoredApplication, ScoredJob } from '../types'
 function CandidateOverviewPage() {
   const { user } = useAuth()
   const previewMode = isPreviewUser(user?.id)
-  const { savedCount } = useSavedJobs(user?.id)
+  const { isSaved } = useSavedJobs(user?.id)
 
   const [jobs, setJobs] = useState<ScoredJob[]>([])
   const [applications, setApplications] = useState<ScoredApplication[]>([])
@@ -64,11 +64,12 @@ function CandidateOverviewPage() {
   const stats = useMemo(
     () => ({
       applications: applications.length,
-      saved: savedCount,
+      // Count only saved jobs that are still listed; closed or deleted jobs drop out.
+      saved: jobs.filter((job) => isSaved(job.id)).length,
       interviews: applications.filter((a) => a.status === 'Interviewing').length,
       inProgress: applications.filter((a) => a.status === 'Pending').length,
     }),
-    [applications, savedCount],
+    [applications, jobs, isSaved],
   )
 
   // FP-CAN-2: the dashboard lists every current job (already sorted by the server).

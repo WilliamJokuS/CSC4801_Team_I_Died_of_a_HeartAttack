@@ -17,11 +17,11 @@ export function useSavedJobs(userId: string | undefined) {
       if (!userId) {
         return false
       }
-      const nowSaved = toggleSavedJobId(userId, jobId)
-      setSavedIds(loadSavedJobIds(userId))
-      return nowSaved
+      const next = toggleSavedJobId(userId, jobId, savedIds)
+      setSavedIds(next)
+      return next.includes(jobId)
     },
-    [userId],
+    [userId, savedIds],
   )
 
   const isSaved = useCallback((jobId: string) => savedIds.includes(jobId), [savedIds])

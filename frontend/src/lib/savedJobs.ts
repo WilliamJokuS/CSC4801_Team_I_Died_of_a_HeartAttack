@@ -20,19 +20,19 @@ export function loadSavedJobIds(userId: string): string[] {
   }
 }
 
-export function saveSavedJobIds(userId: string, ids: string[]): void {
-  localStorage.setItem(storageKey(userId), JSON.stringify(ids))
-}
-
-export function toggleSavedJobId(userId: string, jobId: string): boolean {
-  const current = loadSavedJobIds(userId)
-  if (current.includes(jobId)) {
-    saveSavedJobIds(
-      userId,
-      current.filter((id) => id !== jobId),
-    )
+/** Returns false when storage is unavailable or full; the caller keeps the change in memory. */
+export function saveSavedJobIds(userId: string, ids: string[]): boolean {
+  try {
+    localStorage.setItem(storageKey(userId), JSON.stringify(ids))
+    return true
+  } catch {
     return false
   }
-  saveSavedJobIds(userId, [...current, jobId])
-  return true
+}
+
+/** Toggles one job and returns the resulting saved list (also kept when storage fails). */
+export function toggleSavedJobId(userId: string, jobId: string, current = loadSavedJobIds(userId)): string[] {
+  const next = current.includes(jobId) ? current.filter((id) => id !== jobId) : [...current, jobId]
+  saveSavedJobIds(userId, next)
+  return next
 }

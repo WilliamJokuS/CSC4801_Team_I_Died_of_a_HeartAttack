@@ -157,6 +157,7 @@ function EmployerAvailabilityPage() {
       return
     }
     setSlotPendingDelete(null)
+    setActionError(null)
     setDeletingId(slot.id)
 
     try {

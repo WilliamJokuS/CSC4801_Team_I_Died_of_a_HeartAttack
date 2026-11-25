@@ -13,7 +13,7 @@ const MESSAGES: Record<string, string> = {
   SLOT_BOOKED: "This slot is booked, so it can't be deleted.",
   NOT_INTERVIEWING: 'You can book an interview once the employer moves you to Interviewing.',
   ALREADY_BOOKED: "You've already booked an interview for this application.",
-  SLOT_TAKEN: 'Someone just booked that slot. Please pick another.',
+  SLOT_TAKEN: 'Slot already booked: someone just booked that slot. Please pick another.',
   SLOT_IN_PAST: 'That time has passed. Please pick another slot.',
   PAYLOAD_TOO_LARGE: "That's too much text.",
   NETWORK_ERROR: "Can't reach the server.",

@@ -55,8 +55,10 @@ export function setToken(token: string | null): void {
     if (token) {
       localStorage.setItem(TOKEN_KEY, token);
     } else {
-      // A storage event for a newer sign-in may still be queued.
-      if (storedToken !== undefined && localStorage.getItem(TOKEN_KEY) !== storedToken) return;
+      // A storage event for a newer sign-in may still be queued: keep that token. If storage was
+      // already cleared (e.g. by hand in this tab), record that so the next login isn't blocked.
+      const current = localStorage.getItem(TOKEN_KEY);
+      if (current !== null && storedToken !== undefined && current !== storedToken) return;
       localStorage.removeItem(TOKEN_KEY);
     }
     storedToken = token;
@@ -102,10 +104,13 @@ type Method = 'GET' | 'POST' | 'PUT' | 'DELETE';
 
 export async function request<T>(method: Method, path: string, body?: unknown): Promise<T> {
   const headers: Record<string, string> = {};
+  // Login and register start a new session, so they never carry the old token or depend on it.
+  const isAuthEntry = path === '/auth/login' || path === '/auth/register';
   if (sessionWatchers === 0) refreshStoredToken();
-  const token = getToken();
+  const token = isAuthEntry ? null : getToken();
   const version = getSessionVersion();
-  assertCurrentSession(version);
+  const checkSession = isAuthEntry ? () => {} : () => assertCurrentSession(version);
+  checkSession();
   if (token) headers.Authorization = `Bearer ${token}`;
   if (body !== undefined) headers['Content-Type'] = 'application/json';
 
@@ -117,12 +122,12 @@ export async function request<T>(method: Method, path: string, body?: unknown): 
       body: body === undefined ? undefined : JSON.stringify(body),
     });
   } catch {
-    assertCurrentSession(version);
+    checkSession();
     throw new ApiError(0, 'NETWORK_ERROR', 'Cannot reach the server');
   }
 
   const text = res.status === 204 ? undefined : await res.text();
-  assertCurrentSession(version);
+  checkSession();
   if (res.status === 204) return undefined as T;
 
   const data: unknown = text ? safeJson(text) : undefined;
@@ -133,7 +138,7 @@ export async function request<T>(method: Method, path: string, body?: unknown): 
     const message = envelope?.error?.message ?? res.statusText ?? 'Request failed';
     // Only end the session this request was made with: a stale request finishing after the
     // user logged in again must not discard the new token.
-    if (res.status === 401 && token && path !== '/auth/login' && path !== '/auth/register') {
+    if (res.status === 401 && token) {
       setToken(null);
       onUnauthorized?.();
     }
