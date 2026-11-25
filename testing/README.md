@@ -16,7 +16,7 @@ npm test
 
 `npm test` runs `vitest run --configLoader runner src/unit src/frontend` non-interactively and exits nonzero on failure.
 
-To run the bug regression suite (which asserts the expected fixed behavior for bugs reported to `frontend/` and `backend/` — failing while open and turning green once fixed):
+To run the extended regression suite (which verifies cross-cutting frontend, backend, and repository edge cases):
 
 ```bash
 npm run test:bugs
@@ -67,10 +67,10 @@ The concurrency regression suite runs separately from `npm test` against a real,
 | `src/unit/seed.test.ts` | `FP-ARCH-1`, `FP-DOC-3` | Verifies deterministic `seed.sql` / `reset.sql` (demo accounts, valid `password123` bcrypt hashes, 4 match examples, all 4 application statuses, 2 `Interviewing` candidates racing for a slot) and `/api/health` (`200` vs `503`) |
 | `src/unit/auth-limits.test.ts` | `FP-AUTH-1` | Verifies shared per-IP auth rate limiting (`429 AUTH_RATE_LIMITED` across login/register without affecting `/api/health`) and concurrent auth cap (`503 AUTH_BUSY` with capacity release) |
 | `src/unit/dependency-versions.test.ts` | `FP-ARCH-1`, `FP-SUB-1` | Verifies patched runtime versions of `body-parser` (`>= 2.4`) and `zod` (`>= 4.6.6`) in `backend/` |
-| `src/frontend/availability.test.tsx` | `FP-SCHED-1` | Tests DST nonexistent wall-time rejection, fall-back repeated wall-time offset selection, partial/cleared time edits (`BUG-FE-7`), and `crypto.randomUUID`-unavailable fallback in `EmployerAvailabilityPage` |
+| `src/frontend/availability.test.tsx` | `FP-SCHED-1` | Tests DST nonexistent wall-time rejection, fall-back repeated wall-time offset selection, partial/cleared time edits, and `crypto.randomUUID`-unavailable fallback in `EmployerAvailabilityPage` |
 | `src/frontend/profile-saves.test.tsx` | `FP-CAN-1`, `FP-EMP-1` | Ensures candidate and employer profiles load before allowing replacement saves and disable draft inputs while saving |
-| `src/frontend/session.test.tsx` | `FP-AUTH-1`, `FP-CAN-1` | Tests cross-tab session switching/logout, in-flight `SESSION_CHANGED` cancellation, immediate local logout cleanup, post-login `returnPath` (`BUG-FE-3`), avatar initials sync (`BUG-FE-10`), blocked-storage fallback, and 8-byte Unicode passwords |
-| `src/regression/open-bugs.test.tsx` | Audit regressions | Frontend, backend, and repository checks from the audit |
-| `src/live-pg/concurrency.live.test.ts` | `FP-SCHED-1`, `FP-SCHED-2`, `FP-EMP-2` | Live PostgreSQL concurrency regression suite (`npm run test:live`, commit `db6a0f1`): booking lock-wait past start time (`409 SLOT_IN_PAST`), blocked slot creation past start time (`400 VALIDATION_ERROR`), concurrent vs sequential overlapping slot inserts (`201` / `409 SLOT_OVERLAP`), simultaneous job edits serialization, and simultaneous job deletes locked recheck (`204` / `404 NOT_FOUND`) |
+| `src/frontend/session.test.tsx` | `FP-AUTH-1`, `FP-CAN-1` | Tests cross-tab session switching/logout, in-flight `SESSION_CHANGED` cancellation, immediate local logout cleanup, post-login `returnPath`, avatar initials sync, blocked-storage fallback, and 8-byte Unicode passwords |
+| `src/regression/open-bugs.test.tsx` | `FP-AUTH-1..3`, `FP-CAN-1..3`, `FP-EMP-1..3`, `FP-SCHED-1..3`, `FP-SEC-1..3`, `FP-SUB-1` | Extended frontend, backend, and repository regression checks |
+| `src/live-pg/concurrency.live.test.ts` | `FP-SCHED-1`, `FP-SCHED-2`, `FP-EMP-2` | Live PostgreSQL concurrency regression suite (`npm run test:live`): booking lock-wait past start time (`409 SLOT_IN_PAST`), blocked slot creation past start time (`400 VALIDATION_ERROR`), concurrent vs sequential overlapping slot inserts (`201` / `409 SLOT_OVERLAP`), simultaneous job edits serialization, and simultaneous job deletes locked recheck (`204` / `404 NOT_FOUND`) |
 | `src/live-pg/database-deadlines.live.test.ts` | `FP-ARCH-1`, `FP-SCHED-3` | Bounded health, booking, and deletion responses during connection and lock stalls |
 | `src/live-pg/seed-and-migrations.test.ts` | `FP-DOC-3`, `FP-SCHED-3` | Atomic reseeding, legacy overlap cleanup, and the seeded booking race |

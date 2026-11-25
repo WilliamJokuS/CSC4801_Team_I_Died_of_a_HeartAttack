@@ -1,13 +1,12 @@
 // @vitest-environment jsdom
 /**
- * Regression test suite for bugs found in `frontend/` (Ean Jie) and `backend/` (William).
+ * Extended regression test suite covering frontend, backend, and repository edge cases.
  *
  * Run with:
  *   npm run test:bugs
  *
  * Every test in this file exercises the real source code in `../frontend/src` or `../backend/src`
- * and asserts the **expected (fixed)** behavior. Tests that fail here correspond to open bugs
- * reported to the respective folder owners; each test will turn green once its owner lands the fix.
+ * and asserts the expected behavior.
  */
 import { existsSync, readFileSync, readdirSync } from 'node:fs';
 import { join, resolve } from 'node:path';
@@ -90,8 +89,8 @@ const candUser = {
   created_at: '2026-01-01T00:00:00Z',
 };
 
-describe('Open Bug Regressions — Frontend (Owner: Ean Jie)', () => {
-  it('BUG-FE-1 (FP-EMP-3): EmployerApplicantsPage MUST render candidate.skills even when job.required_skills is empty or candidate has extra skills', async () => {
+describe('Frontend Regression Suite', () => {
+  it('(FP-EMP-3): EmployerApplicantsPage renders candidate.skills even when job.required_skills is empty or candidate has extra skills', async () => {
     const origFetch = globalThis.fetch;
     globalThis.fetch = (async (input: RequestInfo | URL) => {
       const url = String(input);
@@ -209,7 +208,7 @@ describe('Open Bug Regressions — Frontend (Owner: Ean Jie)', () => {
     }
   });
 
-  it('BUG-FE-2 (EmployerAppLayout.tsx:36): Visiting /employer/availability highlights ONLY "Interview slots", not "Job postings"', () => {
+  it('Visiting /employer/availability highlights ONLY "Interview slots", not "Job postings"', () => {
     const { container } = render(
       <AuthContext.Provider value={staticAuth(empUser)}>
         <MemoryRouter initialEntries={['/employer/availability']}>
@@ -225,12 +224,7 @@ describe('Open Bug Regressions — Frontend (Owner: Ean Jie)', () => {
     expect(activeTabs).toEqual(['Interview slots']);
   });
 
-  // Note: former BUG-FE-3 (AuthPage.tsx:117) was verified against the real AuthProvider and passes
-  // because AuthPage's `if (user) return <Navigate ... />` redirects Employers to /employer before
-  // line 118 runs; that coverage now lives in `src/frontend/auth-and-routing.test.tsx`. (Line 117
-  // still uses stale `role` state as dead code worth cleaning up.)
-
-  it('BUG-FE-4 (CandidateProfilePage.tsx:247-255): CandidateProfilePage renders each skill pill once (not duplicated below SkillsField)', async () => {
+  it('(FP-CAN-1): CandidateProfilePage renders each skill pill once (not duplicated below SkillsField)', async () => {
     const origFetch = globalThis.fetch;
     globalThis.fetch = (async () =>
       new Response(
@@ -262,7 +256,7 @@ describe('Open Bug Regressions — Frontend (Owner: Ean Jie)', () => {
     }
   });
 
-  it('BUG-FE-5 (EmployerJobFormPage.tsx / formChange.ts): Reordering job tags enables "Save changes" so primary card tag (tags[0]) can be updated', async () => {
+  it('(FP-EMP-2): Reordering job tags enables "Save changes" so primary card tag (tags[0]) can be updated', async () => {
     const origFetch = globalThis.fetch;
     globalThis.fetch = (async () =>
       new Response(
@@ -306,7 +300,7 @@ describe('Open Bug Regressions — Frontend (Owner: Ean Jie)', () => {
     }
   });
 
-  it('BUG-FE-6 (matchScore.ts): Frontend compareScoredJobs tie-breaking matches backend code-unit ordering', () => {
+  it('(FP-MATCH-1): Frontend compareScoredJobs tie-breaking matches backend code-unit ordering', () => {
     const base = {
       employer_id: 'emp-1',
       company_name: 'Co',
@@ -327,7 +321,7 @@ describe('Open Bug Regressions — Frontend (Owner: Ean Jie)', () => {
     expect(frontendSorted).toEqual(backendSorted);
   });
 
-  it('BUG-FE-7 (EmployerAvailabilityPage.tsx / slotTimeInput.ts): Typing intermediate minutes or clearing input does not prematurely snap to :00 or min', async () => {
+  it('(FP-SCHED-1): Typing intermediate minutes or clearing input does not prematurely snap to :00 or min', async () => {
     const origFetch = globalThis.fetch;
     globalThis.fetch = (async () =>
       new Response(JSON.stringify([]), {
@@ -361,7 +355,7 @@ describe('Open Bug Regressions — Frontend (Owner: Ean Jie)', () => {
     }
   });
 
-  it('BUG-FE-8 (EmployerApplicantsPage.tsx:190-193): Applicant summary line includes Rejected count so breakdown sums to total', async () => {
+  it('(FP-EMP-3): Applicant summary line includes Rejected count so breakdown sums to total', async () => {
     const origFetch = globalThis.fetch;
     globalThis.fetch = (async (input: RequestInfo | URL) => {
       const url = String(input);
@@ -427,7 +421,7 @@ describe('Open Bug Regressions — Frontend (Owner: Ean Jie)', () => {
     }
   });
 
-  it('BUG-FE-9 (CandidateProfilePage.tsx): Save commits uncommitted skill text into the submitted payload', async () => {
+  it('(FP-CAN-1): Save commits uncommitted skill text into the submitted payload', async () => {
     let putPayload: { display_name: string; skills: string[]; resume_text: string } | null = null;
     const origFetch = globalThis.fetch;
     globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
@@ -479,7 +473,7 @@ describe('Open Bug Regressions — Frontend (Owner: Ean Jie)', () => {
     }
   });
 
-  it('BUG-FE-10 (CandidateProfilePage.tsx / AuthContext.tsx): Updating display_name refreshes the top navbar avatar initials', async () => {
+  it('(FP-CAN-1): Updating display_name refreshes the top navbar avatar initials', async () => {
     setToken('cand-jwt');
     let currentDisplayName = 'Alice Tan';
     const origFetch = globalThis.fetch;
@@ -541,7 +535,7 @@ describe('Open Bug Regressions — Frontend (Owner: Ean Jie)', () => {
     }
   });
 
-  it('BUG-FE-11 (FP-SCHED-3, CandidateBookInterviewPage.tsx:44,104-109): 409 SLOT_TAKEN keeps the error message visible after reloading slots and clears the stale selectedSlotId', async () => {
+  it('(FP-SCHED-3): 409 SLOT_TAKEN keeps the error message visible after reloading slots and clears the stale selectedSlotId', async () => {
     let availableSlotsCalls = 0;
     const origFetch = globalThis.fetch;
     globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
@@ -617,7 +611,7 @@ describe('Open Bug Regressions — Frontend (Owner: Ean Jie)', () => {
     }
   });
 
-  it('BUG-FE-12 (FP-SCHED-1, EmployerAvailabilityPage.tsx:117-127): Submitting an empty/invalid slot time shows a validation message instead of throwing RangeError and sticking on "Creating…"', async () => {
+  it('(FP-SCHED-1): Submitting an empty/invalid slot time shows a validation message instead of throwing RangeError and sticking on "Creating…"', async () => {
     const origFetch = globalThis.fetch;
     globalThis.fetch = (async () =>
       new Response(JSON.stringify([]), {
@@ -650,7 +644,7 @@ describe('Open Bug Regressions — Frontend (Owner: Ean Jie)', () => {
     }
   });
 
-  it('BUG-FE-13 (FP-EMP-2, EmployerJobFormPage.tsx:148-159): Job submit commits uncommitted skills and tags into the submitted payload', async () => {
+  it('(FP-EMP-2): Job submit commits uncommitted skills and tags into the submitted payload', async () => {
     let createdPayload: { title: string; description: string; required_skills: string[]; tags?: string[] } | null = null;
     const origFetch = globalThis.fetch;
     globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
@@ -701,7 +695,7 @@ describe('Open Bug Regressions — Frontend (Owner: Ean Jie)', () => {
     }
   });
 
-  it('BUG-FE-14 (FP-AUTH-1, AuthPage.tsx:32-39,67-75): Clicking "Explore with demo account" from /register keeps alice@demo.test and confirmation message even when another email is remembered', async () => {
+  it('(FP-AUTH-1): Clicking "Explore with demo account" from /register keeps alice@demo.test and confirmation message even when another email is remembered', async () => {
     localStorage.setItem('csc4801.rememberEmail', 'hr@acme.demo.test');
 
     const { findByRole, getByLabelText, container } = render(
@@ -725,7 +719,7 @@ describe('Open Bug Regressions — Frontend (Owner: Ean Jie)', () => {
     expect(container.textContent).toMatch(/Demo credentials filled/i);
   });
 
-  it('BUG-FE-15 (SEC-02 / FP-AUTH-1, FP-CAN-1, endpoints.ts:40-46 / AuthContext.tsx:44-47): Logout clears authenticated UI and private resume even if POST /api/auth/logout fails (multi-tab 401 or backend 5xx)', async () => {
+  it('(FP-AUTH-1, FP-CAN-1): Logout clears authenticated UI and private resume even if POST /api/auth/logout fails (multi-tab 401 or backend 5xx)', async () => {
     setToken('cand-jwt');
     const origFetch = globalThis.fetch;
     globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
@@ -785,7 +779,7 @@ describe('Open Bug Regressions — Frontend (Owner: Ean Jie)', () => {
     }
   });
 
-  it('BUG-FE-16 (FUNC-01 / FP-CAN-3, FP-EMP-3, ApplicationStatusBadge.tsx:10-15 / CandidateBookInterviewPage.tsx:152): Status badge displays canonical "Interviewing" (not "Invited") and booked interview page never shows "Invited"', async () => {
+  it('(FP-CAN-3, FP-EMP-3): Status badge displays canonical "Interviewing" (not "Invited") and booked interview page never shows "Invited"', async () => {
     const unbooked = render(<ApplicationStatusBadge status="Interviewing" interviewBooked={false} />);
     expect(unbooked.container.textContent).toMatch(/Interviewing/i);
     expect(unbooked.container.textContent).not.toMatch(/Invited/i);
@@ -840,7 +834,7 @@ describe('Open Bug Regressions — Frontend (Owner: Ean Jie)', () => {
     }
   });
 
-  it('BUG-FE-17 (FUNC-02 / FP-CAN-2, CandidateOverviewPage.tsx:74,182 / CandidateJobsView.tsx:40,125-133): Candidate dashboard lists all active jobs with required skills and "View" opens the clicked job', async () => {
+  it('(FP-CAN-2): Candidate dashboard lists all active jobs with required skills and "View" opens the clicked job', async () => {
     const jobs = [
       {
         id: 'job-1',
@@ -943,7 +937,7 @@ describe('Open Bug Regressions — Frontend (Owner: Ean Jie)', () => {
     }
   });
 
-  it('BUG-FE-18a (V-FUNC-5 / FP-SCHED-1, EmployerAvailabilityPage.tsx:168-176): 409 SLOT_BOOKED on delete reloads slots so the booked slot is no longer shown as "Available"', async () => {
+  it('(FP-SCHED-1): 409 SLOT_BOOKED on delete reloads slots so the booked slot is no longer shown as "Available"', async () => {
     let listCalls = 0;
     const origFetch = globalThis.fetch;
     globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
@@ -1018,7 +1012,7 @@ describe('Open Bug Regressions — Frontend (Owner: Ean Jie)', () => {
     }
   });
 
-  it('BUG-FE-18b (V-FUNC-5 / FP-SCHED-2, CandidateBookInterviewPage.tsx:104-112): 409 SLOT_IN_PAST reloads slots, keeps the error visible, and clears stale selectedSlotId', async () => {
+  it('(FP-SCHED-2): 409 SLOT_IN_PAST reloads slots, keeps the error visible, and clears stale selectedSlotId', async () => {
     let availableCalls = 0;
     const origFetch = globalThis.fetch;
     globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
@@ -1092,7 +1086,7 @@ describe('Open Bug Regressions — Frontend (Owner: Ean Jie)', () => {
     }
   });
 
-  it('BUG-FE-18c (V-FUNC-5 / FP-EMP-2, EmployerDashboardPage.tsx:76-82): 409 JOB_HAS_DEPENDENTS reloads jobs so applicant_count and Delete button reflect server state', async () => {
+  it('(FP-EMP-2): 409 JOB_HAS_DEPENDENTS reloads jobs so applicant_count and Delete button reflect server state', async () => {
     let listCalls = 0;
     const origFetch = globalThis.fetch;
     globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
@@ -1152,7 +1146,7 @@ describe('Open Bug Regressions — Frontend (Owner: Ean Jie)', () => {
     }
   });
 
-  it('BUG-FE-18d (V-FUNC-5 / FP-CAN-3, CandidateJobsView.tsx:149-160): 409 ALREADY_APPLIED reconciles UI to applied state instead of leaving Apply clickable', async () => {
+  it('(FP-CAN-3): 409 ALREADY_APPLIED reconciles UI to applied state instead of leaving Apply clickable', async () => {
     let jobsCalls = 0;
     const origFetch = globalThis.fetch;
     globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
@@ -1218,8 +1212,8 @@ describe('Open Bug Regressions — Frontend (Owner: Ean Jie)', () => {
   });
 });
 
-describe('Open Bug Regressions — Backend (Owner: William)', () => {
-  it('BUG-BE-1 (scheduling/service.ts): POST /api/employers/me/availability rejects duplicate identical slots for the same employer', async () => {
+describe('Backend Regression Suite', () => {
+  it('(FP-SCHED-1): POST /api/employers/me/availability rejects duplicate identical slots for the same employer', async () => {
     const db = new FakePrisma();
     const api = startServer(db);
     const empId = db.addUser({ role: 'Employer', email: 'hr@dup-slot.test' });
@@ -1242,7 +1236,7 @@ describe('Open Bug Regressions — Backend (Owner: William)', () => {
     expect(duplicate.status).toBe(409);
   });
 
-  it('BUG-BE-2 (profiles/service.ts): PUT /api/candidates/me/profile with a stale JWT for a deleted/re-seeded user returns 401 UNAUTHORIZED (not 500 INTERNAL)', async () => {
+  it('(FP-AUTH-3): PUT /api/candidates/me/profile with a stale JWT for a deleted/re-seeded user returns 401 UNAUTHORIZED (not 500 INTERNAL)', async () => {
     const db = new FakePrisma();
     const api = startServer(db);
     const ghostToken = tokenFor('00000000-0000-4000-8000-999999999999', 'Candidate');
@@ -1263,7 +1257,7 @@ describe('Open Bug Regressions — Backend (Owner: William)', () => {
     expect(tagsSchema.safeParse(['  ' + 'a'.repeat(30) + '  ']).success).toBe(true);
   });
 
-  it('BUG-BE-4 (SEC-01 / FP-AUTH-1, FP-AUTH-2, auth/service.ts:45-48,108-120): POST /api/auth/login rejects bcryptjs NUL-byte repeated passwords and >72-byte suffix passwords', async () => {
+  it('(FP-AUTH-1, FP-AUTH-2): POST /api/auth/login rejects bcryptjs NUL-byte repeated passwords and >72-byte suffix passwords', async () => {
     const db = new FakePrisma();
     const api = startServer(db);
 
@@ -1307,7 +1301,7 @@ describe('Open Bug Regressions — Backend (Owner: William)', () => {
     expect(suffixBypass.body).not.toHaveProperty('token');
   });
 
-  it('BUG-BE-5 (SEC-03 / FP-AUTH-3, routes/auth.ts:7): authRouter passes deps.prisma to requireAuth so deleted-user and stale-role JWTs receive 401 on /api/auth/logout and /api/me', async () => {
+  it('(FP-AUTH-3): authRouter passes deps.prisma to requireAuth so deleted-user and stale-role JWTs receive 401 on /api/auth/logout and /api/me', async () => {
     const db = new FakePrisma();
     const api = startServer(db);
 
@@ -1323,7 +1317,7 @@ describe('Open Bug Regressions — Backend (Owner: William)', () => {
     expect(staleLogout.status).toBe(401);
   });
 
-  it('BUG-BE-6 (ENV-01 / FP-ARCH-1, FP-SUB-1, backend/prisma.config.ts:11): prisma.config.ts loads cleanly when DATABASE_URL is unset so postinstall (prisma generate) succeeds on clean checkout', async () => {
+  it('(FP-ARCH-1, FP-SUB-1): prisma.config.ts loads cleanly when DATABASE_URL is unset so postinstall (prisma generate) succeeds on clean checkout', async () => {
     const saved = process.env.DATABASE_URL;
     delete process.env.DATABASE_URL;
     vi.resetModules();
@@ -1337,7 +1331,7 @@ describe('Open Bug Regressions — Backend (Owner: William)', () => {
     }
   });
 
-  it('BUG-BE-7 (V-SEC-1 / +2 pt FP-AUTH-3, FP-SEC-1, scheduling/service.ts:219-231): POST /api/applications/:id/book enforces 404/403 ownership before body validation and before taking a FOR UPDATE row lock', async () => {
+  it('(FP-AUTH-3, FP-SEC-1): POST /api/applications/:id/book enforces 404/403 ownership before body validation and before taking a FOR UPDATE row lock', async () => {
     const db = new FakePrisma();
     const api = startServer(db);
     const empId = db.addUser({ role: 'Employer', email: 'hr@book-order.test' });
@@ -1375,7 +1369,7 @@ describe('Open Bug Regressions — Backend (Owner: William)', () => {
     expect(lockQueries).toEqual([]);
   });
 
-  it('BUG-BE-8 (V-SEC-2 / +2 pt, server.ts:8-21 & app.ts:44): Static/SPA middleware is mounted BEFORE errorHandler so static errors cannot bypass errorHandler into Express finalhandler', () => {
+  it('Static/SPA middleware is mounted BEFORE errorHandler so static errors cannot bypass errorHandler', () => {
     const serverSrc = readFileSync(join(REPO_ROOT, 'backend/src/server.ts'), 'utf8');
     const appSrc = readFileSync(join(REPO_ROOT, 'backend/src/app.ts'), 'utf8');
 
@@ -1386,7 +1380,7 @@ describe('Open Bug Regressions — Backend (Owner: William)', () => {
       const errorHandlerIdx = serverSrc.lastIndexOf('errorHandler');
       expect(
         errorHandlerIdx,
-        'backend/src/server.ts mounts express.static/sendFile after createApp() without registering errorHandler afterward (allows finalhandler stack-trace disclosure)',
+        'backend/src/server.ts mounts express.static/sendFile after createApp() without registering errorHandler afterward',
       ).toBeGreaterThan(lastStaticIdx);
     } else {
       // Otherwise createApp() itself mounts static/SPA middleware before app.use(errorHandler)
@@ -1397,7 +1391,7 @@ describe('Open Bug Regressions — Backend (Owner: William)', () => {
     }
   });
 
-  it('BUG-BE-9 (V-FUNC-3 / +1 pt, auth/profiles/jobs/skills): NUL bytes (\\u0000) and lone UTF-16 surrogates (\\uD800) are rejected with 400 VALIDATION_ERROR across all text, skill, and tag inputs', async () => {
+  it('NUL bytes (\\u0000) and lone UTF-16 surrogates (\\uD800) are rejected with 400 VALIDATION_ERROR across all text, skill, and tag inputs', async () => {
     const db = new FakePrisma();
     const api = startServer(db);
     const candId = db.addUser({ role: 'Candidate', email: 'cand@nul.test' });
@@ -1491,7 +1485,7 @@ describe('Open Bug Regressions — Backend (Owner: William)', () => {
     }
   });
 
-  it('BUG-BE-10 (V-FUNC-4 / +1 pt, lib/errors.ts:55-60): Malformed percent-encoding in route parameters returns 400 BAD_REQUEST (or 404), never 500 INTERNAL', async () => {
+  it('Malformed percent-encoding in route parameters returns 400 BAD_REQUEST (or 404), never 500 INTERNAL', async () => {
     const db = new FakePrisma();
     const api = startServer(db);
     const empId = db.addUser({ role: 'Employer', email: 'emp@uri.test' });
@@ -1506,7 +1500,7 @@ describe('Open Bug Regressions — Backend (Owner: William)', () => {
     expect(badSlotRes.body?.error?.code).not.toBe('INTERNAL');
   });
 
-  it('BUG-BE-11 (V-FUNC-6 / +1 pt, auth/service.ts:28-32): Registration rejects emails exceeding RFC 5321 max length (254 chars) with 400 VALIDATION_ERROR', async () => {
+  it('(FP-AUTH-1): Registration rejects emails exceeding RFC 5321 max length (254 chars) with 400 VALIDATION_ERROR', async () => {
     const db = new FakePrisma();
     const api = startServer(db);
 
@@ -1524,20 +1518,20 @@ describe('Open Bug Regressions — Backend (Owner: William)', () => {
   });
 });
 
-describe('Open Bug Regressions — Shared / Submission Gates (Owner: Everyone)', () => {
-  it('BUG-SH-1 (V-FUNC-1 / FP-SUB-1 Blocker): Root Dockerfile and .dockerignore exist, and .dockerignore excludes local .env files and node_modules', () => {
+describe('Repository & Submission Checks', () => {
+  it('(FP-SUB-1): Root Dockerfile and .dockerignore exist, and .dockerignore excludes local .env files and node_modules', () => {
     const dockerfilePath = join(REPO_ROOT, 'Dockerfile');
     const dockerignorePath = join(REPO_ROOT, '.dockerignore');
 
-    expect(existsSync(dockerfilePath), 'Root Dockerfile is missing (FP-SUB-1 blocker)').toBe(true);
-    expect(existsSync(dockerignorePath), 'Root .dockerignore is missing (risks baking local .env secrets into image)').toBe(true);
+    expect(existsSync(dockerfilePath), 'Root Dockerfile is missing (FP-SUB-1)').toBe(true);
+    expect(existsSync(dockerignorePath), 'Root .dockerignore is missing').toBe(true);
 
     const ignoreText = readFileSync(dockerignorePath, 'utf8');
     expect(ignoreText).toMatch(/(^|\n)\s*(\*\*\/)?\.env(\*|\.\*)?\s*($|\n)/);
     expect(ignoreText).toMatch(/node_modules/);
   });
 
-  it('BUG-SH-2 (V-FUNC-2 / FP-SUB-1 & PEER_REVIEW Blocker): .github/ISSUE_TEMPLATE/audit_bug_report.yml and at least one GitHub Actions workflow exist', () => {
+  it('(FP-SUB-1, PEER_REVIEW): .github/ISSUE_TEMPLATE/audit_bug_report.yml and at least one GitHub Actions workflow exist', () => {
     const issueTemplatePath = join(REPO_ROOT, '.github/ISSUE_TEMPLATE/audit_bug_report.yml');
     const workflowsDir = join(REPO_ROOT, '.github/workflows');
 

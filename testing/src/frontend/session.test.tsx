@@ -160,7 +160,7 @@ it.each([
   { start: '/login', user: employer, expected: '/employer' },
   { start: '/candidate/profile?view=skills', user: employer, expected: '/employer' },
   { start: '/candidate/profile?view=skills', user: alice, expected: '/candidate/profile?view=skills' },
-])('BUG-FE-3 signs $user.role in from $start and lands at $expected', async ({ start, user, expected }) => {
+])('signs $user.role in from $start and lands at $expected', async ({ start, user, expected }) => {
   const visits: string[] = [];
   function PathRecorder() {
     const { pathname, search } = useLocation();
@@ -189,7 +189,7 @@ it.each([
   expect([...new Set(visits.slice(afterLogin))].filter((path) => path !== '/login')).toEqual([expected]);
 });
 
-it('BUG-FE-10 updates the navigation initials from a successfully saved candidate name', async () => {
+it('updates the navigation initials from a successfully saved candidate name', async () => {
   setToken('alice-test-token');
   const profile = { user_id: alice.id, display_name: 'Alice', skills: [], resume_text: '' };
   const fetchMock = vi.fn(async (url, init?: RequestInit) => {

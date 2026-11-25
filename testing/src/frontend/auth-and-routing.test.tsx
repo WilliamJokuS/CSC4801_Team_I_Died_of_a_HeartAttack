@@ -373,7 +373,7 @@ describe('FP-AUTH-1 / FP-AUTH-2 / FP-AUTH-3: AuthProvider, AuthPage, ProtectedRo
     expect(logoutCalled).toBe(true);
     expect(getToken()).toBeNull();
 
-    // Now test stale token triggering 401 on an authenticated API call (matching backend BUG-BE-2 fix)
+    // Now test stale token triggering 401 on an authenticated API call
     cleanup();
     setToken('deleted-user-jwt');
     vi.stubGlobal(

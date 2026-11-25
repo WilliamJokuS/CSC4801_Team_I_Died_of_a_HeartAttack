@@ -63,7 +63,7 @@ it('distinguishes both offsets of a repeated time and allows the future occurren
   expect(view.writes).toEqual([{ start_time: '2027-11-07T09:30:00.000Z', end_time: '2027-11-07T10:00:00.000Z' }]);
 });
 
-it('BUG-FE-7 preserves partial and cleared time inputs while editing', async () => {
+it('preserves partial and cleared time inputs while editing', async () => {
   const view = renderAvailability();
   const start = await view.findByLabelText<HTMLInputElement>('Slot start time');
   fireEvent.change(start, { target: { value: '2030-05-05T10:03' } });

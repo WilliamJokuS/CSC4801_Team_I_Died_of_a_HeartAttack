@@ -1,5 +1,5 @@
 /**
- * Live PostgreSQL concurrency regression suite (commit db6a0f1).
+ * Live PostgreSQL concurrency regression suite.
  *
  * Runs separately from `npm test` via `npm run test:live` against a real,
  * disposable PostgreSQL database (`TEST_DATABASE_URL`, defaulting to local
@@ -29,7 +29,7 @@ import {
 
 const testDatabaseUrl = getTestDatabaseUrl();
 
-describe('Live PostgreSQL concurrency regressions (commit db6a0f1)', () => {
+describe('Live PostgreSQL concurrency regressions', () => {
   let adminPool: pg.Pool;
 
   beforeAll(async () => {
