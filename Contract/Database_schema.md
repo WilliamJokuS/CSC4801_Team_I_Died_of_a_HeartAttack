@@ -11,7 +11,7 @@ The tables below are implemented as Prisma models in `backend/prisma/schema.pris
 | id | uuid | PK |
 | email | text | UNIQUE, NOT NULL |
 | password_hash | text | NOT NULL (bcrypt/argon2, never plaintext) |
-| role | text | NOT NULL, CHECK IN ('Candidate', 'Employer') |
+| role | `Role` enum | NOT NULL, IN ('Candidate', 'Employer') |
 | display_name | text | NOT NULL |
 | created_at | timestamptz | NOT NULL, DEFAULT now() |
 
@@ -59,7 +59,7 @@ Index: `(employer_id)`.
 | id | uuid | PK |
 | job_id | uuid | NOT NULL, FK -> jobs.id |
 | candidate_id | uuid | NOT NULL, FK -> users.id |
-| status | text | NOT NULL, DEFAULT 'Pending', CHECK IN ('Pending','Interviewing','Rejected','Accepted') |
+| status | `ApplicationStatus` enum | NOT NULL, DEFAULT 'Pending', IN ('Pending','Interviewing','Rejected','Accepted') |
 | created_at | timestamptz | NOT NULL, DEFAULT now() |
 | interview_slot_id | uuid | NULL, FK -> availability_slots.id, UNIQUE |
 
@@ -78,6 +78,10 @@ Constraint: `UNIQUE (job_id, candidate_id)` — enforces "apply once" at the DB 
 | is_booked | boolean | NOT NULL, DEFAULT false |
 
 Index: `(employer_id, start_time)`.
+
+Exclusion constraint (`btree_gist` extension): `availability_slots_no_overlap` — `EXCLUDE USING gist ("employer_id" WITH =, tstzrange("start_time", "end_time", '[)') WITH &&)`. Prevents overlapping slots for the same employer while allowing back-to-back `[)` intervals.
+
+Trigger: `serialize_employer_slot_inserts` (`BEFORE INSERT`, calling `lock_employer_slot_inserts()` with `pg_advisory_xact_lock`) serializes concurrent slot inserts per employer before checking the exclusion constraint.
 
 Notes: `is_booked` is a denormalized convenience flag kept in sync with `applications.interview_slot_id` inside the same booking transaction — the `applications.interview_slot_id` UNIQUE constraint is the actual source of truth for "can this slot still be booked," not this flag alone. Deletion of a slot where `is_booked = true` must be rejected at the application layer (FP-SCHED-1).
 
@@ -101,5 +105,5 @@ The seed script (`backend/prisma/seed.ts`, run via `npx prisma db seed` or the p
 - 2 `jobs` rows with non-empty `required_skills`
 - `applications` covering all 4 status values
 - skill combinations reproducing all 4 FP-MATCH-1 examples (`Python,SQL`→`Python,SQL`=100; `Python`→`Python,SQL`=50; `Rust`→`Python,SQL`=0; any→[]=100)
-- 2 `applications` in `Interviewing` status pointed at the **same** `availability_slots` row (both currently unbooked) to exercise the FP-SCHED-3 race
+- 2 `applications` in `Interviewing` status (with `interview_slot_id = NULL`) for jobs of the same employer, eligible to race for the same open `availability_slots` row (FP-SCHED-3)
 - all seed passwords/emails clearly marked as local/demo in `README.md`

@@ -2,7 +2,7 @@
 
 The shared interface between the frontend and the backend. The backend implements every endpoint below; the frontend calls them. Response shapes should match TypeScript types shared between both sides — by convention, kept in `frontend/src/types/index.ts` once the frontend project exists; until then this document is the source of truth for shapes. Any change to an existing route must be agreed by the team before merge (see `AGENTS.md` "Changing the API contract").
 
-> **Status:** includes [specs/001](../specs/001-authuser-shape.md), [002](../specs/002-profile-and-job-shapes.md), [003](../specs/003-application-and-scheduling-shapes.md), and [004](../specs/004-job-tags-and-ui-fields.md), agreed by all three members on 2026-10-23. The specs keep the reasoning behind each decision.
+> **Status:** includes [specs/001](../specs/001-authuser-shape.md), [002](../specs/002-profile-and-job-shapes.md), [003](../specs/003-application-and-scheduling-shapes.md), [004](../specs/004-job-tags-and-ui-fields.md), [005](../specs/005-slot-overlap-and-schema-sync.md), and [006](../specs/006-pre-submission-contract-sync.md). The specs keep the reasoning behind each decision.
 
 **Database:** PostgreSQL, accessed through the [Prisma](https://www.prisma.io/) ORM. See `Database_schema.md` for tables and `INSTALL.md` for setup.
 
@@ -113,8 +113,8 @@ Failures return `400 VALIDATION_ERROR`, with the offending field named in `messa
 
 | Field | Rule |
 |---|---|
-| `email` | valid email; stored trimmed and lowercased |
-| `password` | 8–72 bytes |
+| `email` | valid email (≤ 254 chars on register); stored trimmed and lowercased |
+| `password` | 8–72 bytes (no NUL characters) |
 | `display_name` | non-empty after trim, ≤ 100 chars (stored trimmed) |
 | `role` | `Candidate` or `Employer` |
 | `skills`, `required_skills` | array of strings, ≤ 50 items, each ≤ 50 chars; normalized before storing, so `[" Python", "python", ""]` is stored and returned as `["python"]` |
@@ -125,10 +125,10 @@ Failures return `400 VALIDATION_ERROR`, with the offending field named in `messa
 | `title` | non-empty after trim, ≤ 200 chars |
 | `description` (job) | non-empty after trim, ≤ 10,000 chars |
 | `status` | one of the four `ApplicationStatus` values |
-| `start_time`, `end_time` | ISO 8601 with `Z` or an offset; `end_time` after `start_time`, exactly 30 minutes later; `start_time` in the future |
+| `start_time`, `end_time` | ISO 8601 with `Z` or an offset, millisecond precision, UTC year ≤ 9999; `end_time` after `start_time`, exactly 30 minutes later; `start_time` in the future |
 | `slot_id` | UUID |
 
-Request bodies are limited to 100 kB (`413 PAYLOAD_TOO_LARGE`).
+Persisted text fields reject NUL characters (`\u0000`) and unpaired UTF-16 surrogates (`400 VALIDATION_ERROR`). Request bodies are limited to 100 kB (`413 PAYLOAD_TOO_LARGE`).
 
 ---
 
@@ -136,8 +136,8 @@ Request bodies are limited to 100 kB (`413 PAYLOAD_TOO_LARGE`).
 
 | Method | Path | Request body | Response | Auth |
 |---|---|---|---|---|
-| POST | `/api/auth/register` | `{ email, password, display_name, role }` | `201 { token, user: AuthUser }` | none; `400`, `409 EMAIL_TAKEN` |
-| POST | `/api/auth/login` | `{ email, password }` | `200 { token, user: AuthUser }` | none; `400`, `401 INVALID_CREDENTIALS` (same code and message for unknown email and wrong password) |
+| POST | `/api/auth/register` | `{ email, password, display_name, role }` | `201 { token, user: AuthUser }` | none; `400`, `409 EMAIL_TAKEN`, `429 AUTH_RATE_LIMITED`, `503 AUTH_BUSY` |
+| POST | `/api/auth/login` | `{ email, password }` | `200 { token, user: AuthUser }` | none; `400`, `401 INVALID_CREDENTIALS` (same code and message for unknown email and wrong password), `429 AUTH_RATE_LIMITED`, `503 AUTH_BUSY` |
 | POST | `/api/auth/logout` | — | `204` | authenticated; `401` |
 | GET | `/api/me` | — | `200 AuthUser` | authenticated; `401` (missing, invalid, or expired token) |
 
@@ -185,7 +185,7 @@ The match score (FP-MATCH-1) must be one shared implementation called by both `G
 | Method | Path | Request body | Response | Auth |
 |---|---|---|---|---|
 | GET | `/api/employers/me/availability` | — | `200 EmployerSlot[]` (booked and open, earliest first) | Employer; `401`, `403` |
-| POST | `/api/employers/me/availability` | `{ start_time, end_time }` | `201 AvailabilitySlot` | Employer; `400` on missing timezone / end not after start / not exactly 30 minutes / start not in the future; `401`, `403` |
+| POST | `/api/employers/me/availability` | `{ start_time, end_time }` | `201 AvailabilitySlot` | Employer; `400` on missing timezone / invalid precision or year / end not after start / not exactly 30 minutes / start not in the future; `401`, `403`, `409 SLOT_OVERLAP` |
 | DELETE | `/api/employers/me/availability/{id}` | — | `204`, or `409 SLOT_BOOKED` if booked | Employer, owner only; `401`, `403`, `404` |
 | GET | `/api/applications/{id}/available-slots` | — | `200 AvailabilitySlot[]` (unbooked, future, belonging to the job's employer) | Candidate, application owner only; `401`, `403`, `404` |
 | POST | `/api/applications/{id}/book` | `{ slot_id }` | `200 Application` (with `interview_slot_id` set) | Candidate, application owner only; `400`, `401`, `403`, `404`, `409` |
@@ -225,9 +225,12 @@ Any failure leaves both the application and the slot unchanged.
 | 409 | `ALREADY_APPLIED` | Second application to the same job |
 | 409 | `JOB_HAS_DEPENDENTS` | Delete a job that has applications |
 | 409 | `SLOT_BOOKED` | Delete a booked slot |
+| 409 | `SLOT_OVERLAP` | Create a slot that overlaps one of the employer's existing slots |
 | 409 | `NOT_INTERVIEWING`, `ALREADY_BOOKED`, `SLOT_TAKEN`, `SLOT_IN_PAST` | Booking failures (see above) |
 | 413 | `PAYLOAD_TOO_LARGE` | Request body over 100 kB |
-| 503 | `DB_UNAVAILABLE` | `GET /api/health` can't reach the database |
+| 429 | `AUTH_RATE_LIMITED` | Per-IP rate limit exceeded on `/api/auth/register` or `/api/auth/login` |
+| 503 | `AUTH_BUSY` | Concurrent auth request limit reached on `/api/auth/register` or `/api/auth/login` (`Retry-After: 1`) |
+| 503 | `DB_UNAVAILABLE` | `GET /api/health` can't reach the database, or a transient database/lock/statement timeout occurred |
 | 500 | `INTERNAL` | Unexpected server error (details are logged, never returned) |
 
 ---
