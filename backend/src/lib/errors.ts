@@ -73,6 +73,11 @@ export const errorHandler: ErrorRequestHandler = (err, _req, res, next) => {
     res.status(413).json({ error: { code: 'PAYLOAD_TOO_LARGE', message: 'Request body is too large' } });
     return;
   }
+  // The API contract maps unsupported charsets to 400.
+  if (err?.type === 'charset.unsupported') {
+    res.status(400).json({ error: { code: 'BAD_REQUEST', message: 'Malformed request' } });
+    return;
+  }
   // Express's route decoder sets a status on URIError without setting expose.
   const invalidRoute = err instanceof URIError && 'status' in err && err.status === 400;
   const exposedClientError =
